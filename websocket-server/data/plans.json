@@ -1,0 +1,41 @@
+{
+  "plans": [
+    {
+      "id": "free",
+      "title": "免费版",
+      "price": "¥0",
+      "unit": "/ 月",
+      "features": [
+        "每日有限识别时长",
+        "标准播报音质",
+        "最近 7 天字幕历史"
+      ],
+      "featured": false
+    },
+    {
+      "id": "pro_month",
+      "title": "专业月卡",
+      "price": "¥28",
+      "unit": "/ 月",
+      "features": [
+        "不限识别时长",
+        "优先识别队列",
+        "完整字幕历史",
+        "多音色播报"
+      ],
+      "featured": true
+    },
+    {
+      "id": "pro_year",
+      "title": "专业年卡",
+      "price": "¥198",
+      "unit": "/ 年",
+      "features": [
+        "含专业月卡全部权益",
+        "相当于约 ¥16.5 / 月",
+        "专属客服通道"
+      ],
+      "featured": false
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "vocabVersion": "2026.04.1",
+  "language": "CSL",
+  "gestures": [
+    { "id": "hello", "text": "你好", "aliases": ["您好"] },
+    { "id": "thanks", "text": "谢谢", "aliases": ["感谢"] },
+    { "id": "goodbye", "text": "再见", "aliases": ["拜拜"] },
+    { "id": "yes", "text": "是", "aliases": ["对"] },
+    { "id": "no", "text": "不是", "aliases": ["否"] },
+    { "id": "help", "text": "帮忙", "aliases": ["帮助"] },
+    { "id": "sorry", "text": "对不起", "aliases": ["抱歉"] },
+    { "id": "ok", "text": "好的", "aliases": ["可以"] }
+  ]
+}

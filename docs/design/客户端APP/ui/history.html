@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>历史字幕 · 见音</title>
+  <link rel="icon" type="image/png" href="assets/app-icon.png" />
+  <link rel="stylesheet" href="css/tokens.css" />
+  <link rel="stylesheet" href="css/app.css" />
+</head>
+<body>
+  <div class="device-frame" role="presentation">
+    <div class="device-notch" aria-hidden="true"></div>
+    <div class="device-screen">
+      <header class="app-header">
+        <a href="profile.html" class="icon-btn" aria-label="返回">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </a>
+        <h1>历史字幕</h1>
+        <button type="button" id="history-export" class="header-text-btn">
+          导出
+        </button>
+      </header>
+
+      <div class="app-scroll">
+        <section class="day-group" data-day="2026-10-25" data-day-label="今天" aria-labelledby="day-today">
+          <h2 id="day-today">今天</h2>
+          <article class="history-card">
+            <time datetime="2026-10-25T10:24">10:24</time>
+            <p>你好，很高兴认识你。请问洗手间在哪里？</p>
+          </article>
+          <article class="history-card">
+            <time datetime="2026-10-25T09:02">09:02</time>
+            <p>今天天气不错。我想点一杯咖啡。</p>
+          </article>
+        </section>
+
+        <section class="day-group" data-day="2026-10-24" data-day-label="昨天" aria-labelledby="day-yest">
+          <h2 id="day-yest">昨天</h2>
+          <article class="history-card">
+            <time datetime="2026-10-24T18:41">18:41</time>
+            <p>谢谢你的帮助。我们下午三点见面可以吗？</p>
+          </article>
+          <article class="history-card">
+            <time datetime="2026-10-24T14:15">14:15</time>
+            <p>请稍等，我马上过来。</p>
+          </article>
+        </section>
+
+        <section class="day-group" data-day="2026-10-22" data-day-label="10月22日" aria-labelledby="day-earlier">
+          <h2 id="day-earlier">10月22日</h2>
+          <article class="history-card">
+            <time datetime="2026-10-22T11:08">11:08</time>
+            <p>对不起，我迟到了。路上堵车。</p>
+          </article>
+        </section>
+      </div>
+
+      <div id="cal-dialog" class="cal-dialog" hidden>
+        <button type="button" class="cal-dialog__backdrop" data-cal-close aria-label="关闭"></button>
+        <div class="cal-sheet" role="dialog" aria-modal="true" aria-labelledby="cal-title">
+          <div class="cal-sheet__head">
+            <button type="button" id="cal-prev" class="icon-btn" aria-label="上个月">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6" /></svg>
+            </button>
+            <h2 id="cal-title">2026年10月</h2>
+            <button type="button" id="cal-next" class="icon-btn" aria-label="下个月">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6" /></svg>
+            </button>
+          </div>
+          <div class="cal-weekdays" aria-hidden="true">
+            <span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span>
+          </div>
+          <div id="cal-grid" class="cal-grid"></div>
+          <p class="cal-note">有字幕的日期可选，无字幕的日期不可选。</p>
+          <div class="cal-sheet__actions">
+            <button type="button" class="btn btn--ghost" data-cal-close>取消</button>
+            <button type="button" id="cal-confirm" class="btn btn--primary" disabled>导出</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,112 @@
+/* 见音 — design tokens */
+@import url('https://fonts.googleapis.com/css2?family=Figtree:wght@500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap');
+
+:root {
+  /* Surfaces */
+  --color-ink: #0b1220;
+  --color-ink-elevated: #141c2e;
+  --color-paper: #f4f7fb;
+  --color-paper-elevated: #ffffff;
+  --color-muted: #e8eef6;
+  --color-border: #d5dee9;
+
+  /* Text */
+  --color-fg: #0f172a;
+  --color-fg-muted: #475569;
+  --color-fg-on-ink: #f1f5f9;
+  --color-fg-on-ink-muted: #94a3b8;
+
+  /* Brand */
+  --color-gold: #d4a017;
+  --color-gold-soft: rgba(212, 160, 23, 0.22);
+  --color-teal: #0f766e;
+  --color-teal-soft: #ccfbf1;
+  --color-danger: #dc2626;
+  --color-ring: #0f766e;
+
+  /* Camera chrome */
+  --topbar-bg: rgba(11, 18, 32, 0.55);
+  --caption-glass: rgba(15, 23, 42, 0.38);
+  --caption-glass-blur: 18px;
+  --hint-bg: rgba(15, 118, 110, 0.88);
+
+  /* Runtime status */
+  --status-offline: #94a3b8;
+  --status-idle: #2dd4bf;
+  --status-recognizing: #d4a017;
+  --status-translating: #38bdf8;
+  /* Viewpoint frame */
+  --vp-green: rgba(45, 212, 191, 0.92);
+  --vp-yellow: rgba(212, 160, 23, 0.95);
+  --vp-red: rgba(248, 113, 113, 0.95);
+
+  /* Type */
+  --font-heading: 'Figtree', 'Noto Sans SC', system-ui, sans-serif;
+  --font-body: 'Noto Sans SC', 'Figtree', system-ui, sans-serif;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 1.875rem;
+
+  --lh-tight: 1.25;
+  --lh-normal: 1.5;
+
+  /* Space (8dp rhythm) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  --radius-sm: 12px;
+  --radius-md: 16px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+  --radius-field: 14px;
+  --radius-btn: 14px;
+
+  --touch-min: 44px;
+  --icon-md: 22px;
+
+  --ease: 150ms ease;
+  --ease-out: 200ms ease-out;
+
+  /* Real device insets (viewport-fit=cover) */
+  --safe-top-env: env(safe-area-inset-top, 0px);
+  --safe-bottom-env: env(safe-area-inset-bottom, 0px);
+  --safe-left-env: env(safe-area-inset-left, 0px);
+  --safe-right-env: env(safe-area-inset-right, 0px);
+
+  /*
+   * Prototype device-frame chrome (Dynamic Island strip + home indicator).
+   * Zeroed out in fullscreen phone layout — see app.css @media (max-width: 420px).
+   */
+  --frame-inset-top: 52px;
+  --frame-inset-bottom: 20px;
+  --frame-inset-x: 0px;
+
+  /* Effective safe area used by all chrome */
+  --safe-top: max(var(--safe-top-env), var(--frame-inset-top));
+  --safe-bottom: max(var(--safe-bottom-env), var(--frame-inset-bottom));
+  --safe-left: max(var(--safe-left-env), var(--frame-inset-x));
+  --safe-right: max(var(--safe-right-env), var(--frame-inset-x));
+
+  /* Camera topbar content band below status/notch */
+  --camera-topbar-band: calc(var(--space-3) + var(--touch-min) + var(--space-3));
+
+  --device-w: 390px;
+  --device-h: 844px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --ease: 0ms;
+    --ease-out: 0ms;
+  }
+}
