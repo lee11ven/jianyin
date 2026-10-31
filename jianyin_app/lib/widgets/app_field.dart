@@ -14,7 +14,9 @@ class AppField extends StatelessWidget {
     this.textInputAction,
     this.autofillHints,
     this.minLength,
+    this.maxLength,
     this.onSubmitted,
+    this.enabled = true,
   });
 
   final String label;
@@ -25,7 +27,9 @@ class AppField extends StatelessWidget {
   final TextInputAction? textInputAction;
   final Iterable<String>? autofillHints;
   final int? minLength;
+  final int? maxLength;
   final ValueChanged<String>? onSubmitted;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
@@ -36,6 +40,7 @@ class AppField extends StatelessWidget {
           label,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 fontWeight: FontWeight.w500,
+                color: enabled ? null : AppTokens.fgMuted,
               ),
         ),
         const SizedBox(height: AppTokens.space2),
@@ -45,17 +50,35 @@ class AppField extends StatelessWidget {
           keyboardType: keyboardType,
           textInputAction: textInputAction,
           autofillHints: autofillHints,
+          enabled: enabled,
           onSubmitted: onSubmitted,
+          maxLength: maxLength,
           inputFormatters: keyboardType == TextInputType.phone
               ? [FilteringTextInputFormatter.digitsOnly]
               : null,
-          style: Theme.of(context).textTheme.bodyLarge,
+          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                color: enabled ? null : AppTokens.fgMuted,
+              ),
           decoration: InputDecoration(
             hintText: hint,
             isDense: true,
             contentPadding: const EdgeInsets.symmetric(
               horizontal: AppTokens.space4,
               vertical: 12,
+            ),
+            filled: !enabled,
+            fillColor: enabled ? null : AppTokens.muted,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(AppTokens.radiusField),
+              borderSide: const BorderSide(color: AppTokens.border),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(AppTokens.radiusField),
+              borderSide: const BorderSide(color: AppTokens.border),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(AppTokens.radiusField),
+              borderSide: const BorderSide(color: AppTokens.teal),
             ),
           ),
         ),

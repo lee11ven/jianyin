@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { config, isDebugBuild } from '../config.js';
+import { config } from '../config.js';
 import {
   authenticateAccount,
   findUserById,
@@ -14,7 +14,7 @@ import {
   subscribe,
 } from '../auth/membership.js';
 import { listUserHistoryDays } from '../auth/user_history.js';
-import { extractBearer, issueDemoToken, issueToken, verifyToken } from '../auth/tokens.js';
+import { extractBearer, issueToken, verifyToken } from '../auth/tokens.js';
 import {
   buildWsUrl,
   createSession,
@@ -26,6 +26,12 @@ import {
 import { getHistory } from '../session/history.js';
 import { errorFrame, sendJson } from '../protocol.js';
 import { gesturesCatalog } from '../data/gestures.js';
+import {
+  generateOtpCode,
+  storeOtp,
+  verifyOtp as verifyOtpEntry,
+  otpRemainingMs,
+} from '../auth/otp_store.js';
 
 function requireAuth(req, res, next) {
   const token = extractBearer(req.get('authorization'));
@@ -67,9 +73,75 @@ export function createRestRouter(hooks = {}) {
     res.json({ status: 'ok', protocolVersion: config.protocolVersion });
   });
 
+  // ---- OTP (短信验证码) ----
+
+  /**
+   * POST /api/v1/auth/send-otp
+   * Body: { phone: string }
+   * Response: { sent: true }  (code is NOT returned; in debug only it may be logged)
+   */
+  router.post('/api/v1/auth/send-otp', (req, res) => {
+    try {
+      const { phone } = req.body || {};
+      if (!phone || typeof phone !== 'string') {
+        return res.status(400).json({ code: 'bad_request', message: 'phone is required' });
+      }
+      const normalized = phone.trim();
+      // Only validate length format, not strict 11-digit (allow testing)
+      storeOtp(normalized);
+      res.json({ sent: true, phone: normalized });
+    } catch (err) {
+      sendAuthError(res, err);
+    }
+  });
+
+  /**
+   * POST /api/v1/auth/verify-otp
+   * Body: { phone: string, code: string }
+   * Response: { valid: true } on success
+   */
+  router.post('/api/v1/auth/verify-otp', (req, res) => {
+    try {
+      const { phone, code } = req.body || {};
+      if (!phone || !code) {
+        return res.status(400).json({ code: 'bad_request', message: 'phone and code are required' });
+      }
+      const ok = verifyOtpEntry(phone.trim(), String(code).trim());
+      if (!ok) {
+        return res.status(400).json({
+          code: 'invalid_otp',
+          message: '验证码不正确或已过期，请重新获取',
+        });
+      }
+      res.json({ valid: true, phone: phone.trim() });
+    } catch (err) {
+      sendAuthError(res, err);
+    }
+  });
+
+  // ---- Account ----
+
+  /**
+   * POST /api/v1/auth/register
+   * Body: { phone, password, code, username?, sex? }
+   * Requires a valid OTP for the phone number (sent via send-otp).
+   */
   router.post('/api/v1/auth/register', (req, res) => {
     try {
-      const { phone, password, username, sex, deviceId } = req.body || {};
+      const { phone, password, code, username, sex, deviceId } = req.body || {};
+      if (!phone || !password || !code) {
+        return res.status(400).json({
+          code: 'bad_request',
+          message: 'phone, password, and code are required',
+        });
+      }
+      const otpOk = verifyOtpEntry(phone.trim(), String(code).trim());
+      if (!otpOk) {
+        return res.status(400).json({
+          code: 'invalid_otp',
+          message: '验证码不正确或已过期，请重新获取',
+        });
+      }
       const account = registerAccount({ phone, password, username, sex });
       res.status(201).json(tokenForUser(account, deviceId));
     } catch (err) {
@@ -77,6 +149,10 @@ export function createRestRouter(hooks = {}) {
     }
   });
 
+  /**
+   * POST /api/v1/auth/login
+   * Body: { phone, password, deviceId? }
+   */
   router.post('/api/v1/auth/login', (req, res) => {
     try {
       const { phone, password, deviceId } = req.body || {};
@@ -87,22 +163,9 @@ export function createRestRouter(hooks = {}) {
     }
   });
 
-  router.post('/api/v1/auth/demo-token', (req, res) => {
-    if (!isDebugBuild()) {
-      return res.status(404).json({ code: 'not_found', message: 'demo-token disabled in production' });
-    }
-    try {
-      const { role = 'app', deviceId } = req.body || {};
-      res.json(issueDemoToken({ role, deviceId }));
-    } catch (err) {
-      sendAuthError(res, err);
-    }
-  });
-
   router.get('/api/v1/me', requireAuth, (req, res) => {
     const user = findUserById(req.auth.userId);
     if (!user) {
-      // demo-token users may not be in users.json
       return res.json({
         userId: req.auth.userId,
         username: req.auth.username,

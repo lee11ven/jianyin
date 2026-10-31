@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'dart:ui' show Offset;
+
 import 'package:flutter/foundation.dart';
 
 import '../features/home/sense_status.dart';
@@ -9,10 +11,53 @@ import 'api_client.dart';
 import 'auth_store.dart';
 import 'session_models.dart';
 
-/// Home lifecycle: REST session + `/ws/app` + caption state.
+/// Tracks the detected face center in normalized camera-frame coordinates (0..1).
+/// Rebuilt by HomeSessionController from the nose landmark each tick.
+class FaceTracker extends ChangeNotifier {
+  double? _x;
+  double? _y;
+  int _lastTs = 0;
+
+  double? get x => _x;
+  double? get y => _y;
+  bool get hasFace => _x != null;
+
+  /// Update face position with a 50 ms debounce to avoid excessive rebuilds.
+  void update(double x, double y, [int now = 0]) {
+    final ts = now;
+    if (ts - _lastTs < 50) return;
+    _lastTs = ts;
+    _x = x.clamp(0.0, 1.0);
+    _y = y.clamp(0.0, 1.0);
+    notifyListeners();
+  }
+
+  void reset() {
+    if (_x == null) return;
+    _x = null;
+    _y = null;
+    notifyListeners();
+  }
+}
+
+/// Convert a face position from the camera preview frame to the overlay frame.
 ///
-/// Enter Home → (camera ready) → token → POST /sessions → WS.
-/// Leave Home → close WS (no reconnect) → REST stop.
+/// The overlay frame is centered on screen at overlayFrameWidthDp while the
+/// camera fills the full screenWidthDp. The vertical scale is identical since
+/// both use full-screen height; only the horizontal axis needs correction.
+Offset faceToOverlayPos({
+  required Offset face,
+  required double overlayFrameWidthDp,
+  required double screenWidthDp,
+}) {
+  final scaleX = overlayFrameWidthDp / screenWidthDp;
+  return Offset(face.dx * scaleX, face.dy);
+}
+
+/// Home lifecycle: REST session + /ws/app + caption state.
+///
+/// Enter Home -> (camera ready) -> token -> POST /sessions -> WS.
+/// Leave Home -> close WS (no reconnect) -> REST stop.
 class HomeSessionController extends ChangeNotifier {
   HomeSessionController({
     AuthStore? authStore,
@@ -25,6 +70,9 @@ class HomeSessionController extends ChangeNotifier {
   final AuthStore _auth;
   final ApiClient _api;
   final AppWsClient _ws;
+
+  final FaceTracker _faceTracker = FaceTracker();
+  FaceTracker get faceTracker => _faceTracker;
 
   StreamSubscription<WsEvent>? _wsSub;
   Timer? _retryTimer;
@@ -75,7 +123,7 @@ class HomeSessionController extends ChangeNotifier {
     }
   }
 
-  /// Call when rear camera preview is ready (architecture step 2 → 3).
+  /// Call when rear camera preview is ready (architecture step 2 -> 3).
   Future<void> onCameraReady() async {
     _cameraReady = true;
     if (_homeActive) {
@@ -155,12 +203,37 @@ class HomeSessionController extends ChangeNotifier {
     });
   }
 
+  /// Called by CameraPreviewPanel.onLandmarks.
+  ///
+  /// The payload is either a csl_channels_v1 JSON (from envelope packer) or a
+  /// gesture_skeleton_envelope_v1 catalog frame. We detect kind to route accordingly.
   void onLandmarks(Map<String, dynamic> json) {
-    if (!_homeActive || _sessionId == null || !_ws.isOpen) return;
+    if (!_homeActive || _sessionId == null) return;
+
+    final kind = json['kind'] as String?;
+    final envelope = json['envelope'] as String?;
+
+    // Catalog is sent by the WS client on connect; just log it.
+    if (kind == 'catalog' && envelope == 'gesture_skeleton_envelope_v1') {
+      debugPrint('[Envelope] catalog received from client (echo)');
+      return;
+    }
+
+    if (!_ws.isOpen) return;
 
     final payload = Map<String, dynamic>.from(json);
     payload['sessionId'] = _sessionId;
 
+    // If this is a full envelope frame, send it as-is.
+    // Otherwise it is a csl_channels_v1 landmarks packet.
+    final hasEnvelope = envelope == 'gesture_skeleton_envelope_v1' && kind == 'frame';
+    if (hasEnvelope) {
+      _ws.sendEnvelopeFrame(payload);
+    } else {
+      _ws.sendLandmarks(payload);
+    }
+
+    // Update sense status from the payload.
     final hasHands = payload.containsKey('hands');
     final path = payload['path'];
     final pathGap = path is Map && path['gap'] == true;
@@ -171,7 +244,19 @@ class HomeSessionController extends ChangeNotifier {
       }
     }
 
-    _ws.sendLandmarks(payload);
+    // Extract nose position from body frame to drive the viewpoint overlay.
+    final body = payload['body'] as Map<String, dynamic>?;
+    final points = body?['points'] as Map<String, dynamic>?;
+    final nose = points?['nose'] as Map<String, dynamic>?;
+    if (nose != null) {
+      final nx = (nose['x'] as num?)?.toDouble() ?? double.nan;
+      final ny = (nose['y'] as num?)?.toDouble() ?? double.nan;
+      if (!nx.isNaN && !ny.isNaN && nx >= 0 && nx <= 1 && ny >= 0 && ny <= 1) {
+        _faceTracker.update(nx, ny, DateTime.now().millisecondsSinceEpoch);
+      }
+    } else if (body != null) {
+      _faceTracker.reset();
+    }
   }
 
   void _onWsEvent(WsEvent event) {
@@ -295,6 +380,7 @@ class HomeSessionController extends ChangeNotifier {
     voice = VoiceStatus.idle;
     currentCaption = '';
     _lastErrorHint = null;
+    _faceTracker.reset();
     notifyListeners();
     _stopping = false;
   }

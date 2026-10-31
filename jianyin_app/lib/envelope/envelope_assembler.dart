@@ -5,14 +5,20 @@ import 'envelope_packer.dart';
 import 'envelope_types.dart';
 import 'landmark_point.dart';
 
-/// Builds local [gesture_skeleton_envelope_v1] frames and projects uplink.
+/// Builds local gesture_skeleton_envelope_v1 frames and projects uplink.
 ///
-/// Same-tick order (locked): body → trajectory → skeleton → assemble → pack.
+/// Same-tick order (locked): body -> trajectory -> skeleton -> assemble -> pack.
 /// Bones / relation / present / valid / segment are never uplinked.
 abstract class EnvelopeAssembler {
   GestureSkeletonCatalog catalog();
 
-  /// `handState == none` → null (no frame).
+  /// Whether catalog has been emitted at least once.
+  bool get catalogSent;
+
+  /// Reset catalog sent state (called on reconnect).
+  void resetCatalogSent();
+
+  /// handState == none -> null (no frame).
   GestureSkeletonFrame? assembleFrame({
     required int ts,
     required HandState handState,
@@ -34,10 +40,22 @@ abstract class EnvelopeAssembler {
 
 /// Expands Hands42 into full joint/bone frame identity, then packs uplink.
 class DefaultEnvelopeAssembler implements EnvelopeAssembler {
-  const DefaultEnvelopeAssembler();
+  DefaultEnvelopeAssembler();
+
+  bool _catalogSent = false;
+  @override
+  bool get catalogSent => _catalogSent;
+  @override
+  void resetCatalogSent() => _catalogSent = false;
+
+  late final GestureSkeletonCatalog _catalog =
+      GestureSkeletonCatalog.fromLocked();
 
   @override
-  GestureSkeletonCatalog catalog() => GestureSkeletonCatalog.fromLocked();
+  GestureSkeletonCatalog catalog() {
+    _catalogSent = true;
+    return _catalog;
+  }
 
   @override
   GestureSkeletonFrame? assembleFrame({

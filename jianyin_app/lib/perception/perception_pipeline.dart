@@ -8,10 +8,10 @@ import '../skeleton/hand_skeleton_extractor.dart';
 import '../skeleton/hand_types.dart';
 import '../trajectory/trajectory_tracker.dart';
 
-/// Same-tick perception scheduler: body → trajectory → skeleton → envelope.
+/// Same-tick perception scheduler: body -> trajectory -> skeleton -> envelope.
 ///
 /// MediaPipe SDKs plug into the three extractors; this class only orders calls,
-/// assembles the local frame, and packs `csl_channels_v1`.
+/// assembles the local frame, and packs csl_channels_v1.
 class PerceptionPipeline {
   PerceptionPipeline({
     BodyExtractor? body,
@@ -22,8 +22,8 @@ class PerceptionPipeline {
   })  : _body = body ?? StubBodyExtractor(),
         _trajectory = trajectory ?? StubTrajectoryTracker(),
         _skeleton = skeleton ?? StubHandSkeletonExtractor(),
-        _assembler = assembler ?? const DefaultEnvelopeAssembler(),
-        _packer = packer ?? const DefaultEnvelopePacker();
+        _assembler = assembler ?? DefaultEnvelopeAssembler(),
+        _packer = packer ?? DefaultEnvelopePacker();
 
   final BodyExtractor _body;
   final TrajectoryTracker _trajectory;
@@ -31,12 +31,15 @@ class PerceptionPipeline {
   final EnvelopeAssembler _assembler;
   final EnvelopePacker _packer;
 
+  /// Access the assembler for catalog queries.
+  EnvelopeAssembler get assembler => _assembler;
+
   /// Prefer Hands wrists from the previous tick when present.
   LandmarkPoint? _prevHandsWristL;
   LandmarkPoint? _prevHandsWristR;
 
-  /// Run one activity-segment tick. [frame] is a [VisionFrame] once camera lands.
-  Future<CslChannelsLandmarks> tick({
+  /// Run one activity-segment tick. [frame] is a VisionFrame once camera lands.
+  Future<CslChannelsLandmarks?> tick({
     required int ts,
     required String sessionId,
     required Object frame,

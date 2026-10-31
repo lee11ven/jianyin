@@ -11,7 +11,7 @@ import 'ws_events.dart';
 
 enum AppWsState { idle, connecting, open, reconnecting, closed }
 
-/// `/ws/app` client: heartbeat, drop-old landmarks uplink, downlink routing.
+/// /ws/app client: heartbeat, drop-old landmarks uplink, downlink routing.
 class AppWsClient {
   AppWsClient();
 
@@ -41,7 +41,11 @@ class AppWsClient {
   Map<String, dynamic>? _pendingLandmarks;
   bool _sendingLandmarks = false;
 
+  /// Whether the catalog has been sent for this session.
+  bool _catalogSent = false;
+
   bool get isOpen => state == AppWsState.open;
+  bool get catalogSent => _catalogSent;
 
   Future<void> connect({
     required String token,
@@ -55,6 +59,7 @@ class AppWsClient {
     _wsUrl = wsUrl;
     _allowReconnect = true;
     _reconnectAttempt = 0;
+    _catalogSent = false;
     await _open();
   }
 
@@ -98,6 +103,8 @@ class AppWsClient {
       );
       _events.add(WsConnected(sessionId: sid));
       _flushLandmarks();
+      // Send catalog as first event so server knows the identity schema.
+      _sendCatalog();
     } catch (e) {
       debugPrint('WS connect failed: $e');
       _onSocketLost('$e');
@@ -130,6 +137,33 @@ class AppWsClient {
     }
   }
 
+  /// Send the gesture_skeleton_envelope_v1 catalog document.
+  void _sendCatalog() {
+    if (_catalogSent || state != AppWsState.open) return;
+    _catalogSent = true;
+    try {
+      _channel?.sink.add(jsonEncode({
+        'envelope': 'gesture_skeleton_envelope_v1',
+        'kind': 'catalog',
+        'ts': DateTime.now().millisecondsSinceEpoch,
+      }));
+      _touchAlive();
+    } catch (e) {
+      debugPrint('WS catalog send failed: $e');
+    }
+  }
+
+  /// Send a full envelope frame (kind: frame) directly over WS.
+  void sendEnvelopeFrame(Map<String, dynamic> frame) {
+    if (state != AppWsState.open) return;
+    try {
+      _channel?.sink.add(jsonEncode(frame));
+      _touchAlive();
+    } catch (e) {
+      debugPrint('WS envelope frame send failed: $e');
+    }
+  }
+
   void _onData(dynamic data) {
     _touchAlive();
     if (data is List<int>) {
@@ -144,8 +178,8 @@ class AppWsClient {
     if (data is! String) return;
     Map<String, dynamic> json;
     try {
-      final decoded = jsonDecode(data);
-      if (decoded is! Map) return;
+      final decoded = jsonDecode(data) as Map;
+
       json = Map<String, dynamic>.from(decoded);
     } catch (_) {
       return;
@@ -240,13 +274,11 @@ class AppWsClient {
     _pingTimer = Timer.periodic(ApiConfig.heartbeatInterval, (_) {
       if (state != AppWsState.open) return;
       try {
-        _channel?.sink.add(
-          jsonEncode({
-            'type': 'ping',
-            'protocolVersion': ApiConfig.protocolVersion,
-            'ts': DateTime.now().millisecondsSinceEpoch,
-          }),
-        );
+        _channel?.sink.add(jsonEncode({
+          'type': 'ping',
+          'protocolVersion': ApiConfig.protocolVersion,
+          'ts': DateTime.now().millisecondsSinceEpoch,
+        }));
       } catch (_) {
         _onSocketLost('ping failed');
       }

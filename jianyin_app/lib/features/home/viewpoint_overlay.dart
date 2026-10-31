@@ -1,22 +1,69 @@
 import 'package:flutter/material.dart';
 
+import '../../session/home_session_controller.dart';
 import '../../theme/tokens.dart';
 
-class ViewpointOverlay extends StatelessWidget {
+/// Viewport alignment overlay that follows the real-time face ellipse.
+class ViewpointOverlay extends StatefulWidget {
   const ViewpointOverlay({
     super.key,
     required this.offline,
     required this.caption,
+    required this.faceTracker,
+    required this.screenWidthDp,
   });
 
   final bool offline;
   final String caption;
+  final FaceTracker faceTracker;
+  final double screenWidthDp;
+
+  @override
+  State<ViewpointOverlay> createState() => _ViewpointOverlayState();
+}
+
+class _ViewpointOverlayState extends State<ViewpointOverlay>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _alignController;
+  double _alignedRatio = 1.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _alignController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 200),
+    );
+    widget.faceTracker.addListener(_onFaceUpdate);
+  }
+
+  @override
+  void dispose() {
+    widget.faceTracker.removeListener(_onFaceUpdate);
+    _alignController.dispose();
+    super.dispose();
+  }
+
+  void _onFaceUpdate() {
+    if (!widget.faceTracker.hasFace) return;
+    final dx = widget.faceTracker.x! - 0.5;
+    if (dx.abs() < 0.02) {
+      if (_alignedRatio != 1.0) {
+        setState(() => _alignedRatio = 1.0);
+        _alignController.forward(from: 0);
+      }
+    } else {
+      _alignedRatio = (1.0 - dx.abs() * 2).clamp(0.0, 1.0);
+      _alignController.forward(from: 0);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final color = offline ? AppTokens.vpRed : AppTokens.vpGreen;
-    final frameW = MediaQuery.sizeOf(context).width * 0.72;
+    final color = widget.offline ? AppTokens.vpRed : AppTokens.vpGreen;
+    final frameW = widget.screenWidthDp * 0.72;
     final frameH = frameW * 4 / 3;
+
     return IgnorePointer(
       child: Center(
         child: Column(
@@ -26,12 +73,19 @@ class ViewpointOverlay extends StatelessWidget {
               width: frameW,
               height: frameH,
               child: CustomPaint(
-                painter: _ViewpointPainter(color: color),
+                painter: _ViewpointPainter(
+                  color: color,
+                  faceTracker: widget.faceTracker,
+                  frameW: frameW,
+                  frameH: frameH,
+                  screenWidthDp: widget.screenWidthDp,
+                  alignedRatio: _alignedRatio,
+                ),
               ),
             ),
             const SizedBox(height: AppTokens.space3),
             Text(
-              caption,
+              widget.caption,
               style: TextStyle(
                 color: color,
                 fontSize: AppTokens.textXs,
@@ -49,13 +103,24 @@ class ViewpointOverlay extends StatelessWidget {
 }
 
 class _ViewpointPainter extends CustomPainter {
-  _ViewpointPainter({required this.color});
+  _ViewpointPainter({
+    required this.color,
+    required this.faceTracker,
+    required this.frameW,
+    required this.frameH,
+    required this.screenWidthDp,
+    required this.alignedRatio,
+  });
 
   final Color color;
+  final FaceTracker faceTracker;
+  final double frameW;
+  final double frameH;
+  final double screenWidthDp;
+  final double alignedRatio;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final rect = Offset.zero & size;
     final paint = Paint()
       ..color = color
       ..style = PaintingStyle.stroke
@@ -63,49 +128,84 @@ class _ViewpointPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round;
 
     const arm = 22.0;
-    // corners
-    canvas.drawLine(rect.topLeft, rect.topLeft + const Offset(arm, 0), paint);
-    canvas.drawLine(rect.topLeft, rect.topLeft + const Offset(0, arm), paint);
-    canvas.drawLine(rect.topRight, rect.topRight + const Offset(-arm, 0), paint);
-    canvas.drawLine(rect.topRight, rect.topRight + const Offset(0, arm), paint);
-    canvas.drawLine(
-      rect.bottomLeft,
-      rect.bottomLeft + const Offset(arm, 0),
-      paint,
-    );
-    canvas.drawLine(
-      rect.bottomLeft,
-      rect.bottomLeft + const Offset(0, -arm),
-      paint,
-    );
-    canvas.drawLine(
-      rect.bottomRight,
-      rect.bottomRight + const Offset(-arm, 0),
-      paint,
-    );
-    canvas.drawLine(
-      rect.bottomRight,
-      rect.bottomRight + const Offset(0, -arm),
-      paint,
-    );
+    // Corner brackets
+    canvas.drawLine(Offset.zero, Offset(arm, 0), paint);
+    canvas.drawLine(Offset.zero, Offset(0, arm), paint);
+    canvas.drawLine(Offset(size.width, 0), Offset(size.width - arm, 0), paint);
+    canvas.drawLine(Offset(size.width, 0), Offset(size.width, arm), paint);
+    canvas.drawLine(Offset(0, size.height), Offset(arm, size.height), paint);
+    canvas.drawLine(Offset(0, size.height), Offset(0, size.height - arm), paint);
+    canvas.drawLine(Offset(size.width, size.height), Offset(size.width - arm, size.height), paint);
+    canvas.drawLine(Offset(size.width, size.height), Offset(size.width, size.height - arm), paint);
 
-    // head oval
-    final head = Rect.fromCenter(
-      center: Offset(size.width / 2, size.height * 0.28),
-      width: size.width * 0.28,
-      height: size.height * 0.16,
-    );
-    canvas.drawOval(head, paint..strokeWidth = 1.5);
-
-    // shoulder dashed line
+    // Shoulder dashed line
     final dash = Paint()
       ..color = color.withValues(alpha: 0.75)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.25;
-    final y = size.height * 0.48;
-    final start = Offset(size.width * 0.18, y);
-    final end = Offset(size.width * 0.82, y);
-    _drawDashed(canvas, start, end, dash);
+    final shoulderY = size.height * 0.48;
+    _drawDashed(
+      canvas,
+      Offset(size.width * 0.18, shoulderY),
+      Offset(size.width * 0.82, shoulderY),
+      dash,
+    );
+
+    // Face ellipse — tracks real nose landmark
+    if (faceTracker.hasFace) {
+      final pos = faceToOverlayPos(
+        face: Offset(faceTracker.x!, faceTracker.y!),
+        overlayFrameWidthDp: frameW,
+        screenWidthDp: screenWidthDp,
+      );
+      final headW = size.width * 0.22;
+      final headH = size.height * 0.30;
+      final head = Rect.fromCenter(
+        center: pos,
+        width: headW,
+        height: headH,
+      );
+      canvas.drawOval(head, paint..strokeWidth = 1.5);
+    } else {
+      // Placeholder when no face detected yet
+      final head = Rect.fromCenter(
+        center: Offset(size.width / 2, size.height * 0.30),
+        width: size.width * 0.22,
+        height: size.height * 0.30,
+      );
+      canvas.drawOval(
+        head,
+        paint
+          ..color = color.withValues(alpha: 0.4)
+          ..strokeWidth = 1.5
+          ..style = PaintingStyle.stroke,
+      );
+    }
+
+    // Center-alignment arrow when face is off-center
+    if (faceTracker.hasFace && alignedRatio < 0.95) {
+      final arrowPaint = Paint()
+        ..color = color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2;
+      final cx = size.width / 2;
+      final cy = size.height * 0.30;
+      final dy = (0.5 - faceTracker.y!) * size.height * 0.15;
+      final arrowDir = dy.sign;
+      final arrowY = cy + dy;
+      canvas.drawLine(Offset(cx, cy - 8 * arrowDir), Offset(cx, arrowY), arrowPaint);
+      final tipSize = 5.0;
+      canvas.drawLine(
+        Offset(cx - tipSize, arrowY - 6 * arrowDir),
+        Offset(cx, arrowY),
+        arrowPaint,
+      );
+      canvas.drawLine(
+        Offset(cx + tipSize, arrowY - 6 * arrowDir),
+        Offset(cx, arrowY),
+        arrowPaint,
+      );
+    }
   }
 
   void _drawDashed(Canvas canvas, Offset a, Offset b, Paint paint) {
@@ -116,7 +216,7 @@ class _ViewpointPainter extends CustomPainter {
     var drawn = 0.0;
     while (drawn < total) {
       final from = a + dir * drawn;
-      final to = a + dir * (drawn + dashWidth).clamp(0, total);
+      final to = a + dir * (drawn + dashWidth).clamp(0.0, total);
       canvas.drawLine(from, to, paint);
       drawn += dashWidth + gap;
     }
@@ -124,5 +224,7 @@ class _ViewpointPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _ViewpointPainter oldDelegate) =>
-      oldDelegate.color != color;
+      oldDelegate.color != color ||
+      oldDelegate.faceTracker != faceTracker ||
+      oldDelegate.alignedRatio != alignedRatio;
 }

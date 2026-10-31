@@ -166,7 +166,7 @@ Uint8List _yuv420ToRgba(List<_PlaneData> planes, int width, int height) {
     for (var y = 0; y < height; y++) {
       for (var x = 0; x < width; x++) {
         final yi = yBytes[y * yStride + x] & 0xff;
-        final uvIndex = (y >> 1) * uvStride + (x & ~1);
+        final uvIndex = ((y >> 1) * uvStride + (x & ~1)).clamp(0, uv.length - 2);
         int u;
         int v;
         if (nv21) {
@@ -191,7 +191,7 @@ Uint8List _yuv420ToRgba(List<_PlaneData> planes, int width, int height) {
       for (var x = 0; x < width; x++) {
         final yi = yBytes[y * yStride + x] & 0xff;
         final ui = uBytes[(y >> 1) * uStride + (x >> 1)] & 0xff;
-        final vi = vBytes[(y >> 1) * vStride + (x >> 1)] & 0xff;
+        final vi = vBytes[(((y >> 1) * vStride + (x >> 1)).clamp(0, vBytes.length - 1))] & 0xff;
         _yuvToRgbaPixel(out, (y * width + x) * 4, yi, ui, vi);
       }
     }

@@ -4,9 +4,11 @@ import 'package:flutter/material.dart';
 
 import '../../camera/frame_sampler.dart';
 import '../../perception/perception_runtime.dart';
-import '../../theme/tokens.dart';
 
-/// Rear camera preview + Idle/Active frame sampler → perception tick.
+/// Rear camera preview + Idle/Active frame sampler -> perception tick.
+///
+/// Promotes PerceptionRuntime to a shared singleton so the home controller can
+/// access catalog() and visionReady status independently of the widget lifecycle.
 class CameraPreviewPanel extends StatefulWidget {
   const CameraPreviewPanel({
     super.key,
@@ -77,7 +79,7 @@ class _CameraPreviewPanelState extends State<CameraPreviewPanel> {
         sampler = FrameSampler(
           sensorOrientation: rear.sensorOrientation,
           onTick: (req) async {
-            final msg = await runtime.tick(
+            final json = await runtime.tickEnvelope(
               ts: req.ts,
               frame: req.frame,
               handStatePrior: req.handState,
@@ -85,9 +87,9 @@ class _CameraPreviewPanelState extends State<CameraPreviewPanel> {
               forcePathGap: req.forcePathGap,
               omitHands: req.omitHands,
             );
-            if (msg == null) return;
+            if (json == null) return;
             widget.onHintShowUpperBody?.call(runtime.hintShowUpperBody);
-            widget.onLandmarks?.call(msg.toJson());
+            widget.onLandmarks?.call(json);
           },
         );
       }
@@ -153,7 +155,7 @@ class _CameraFallback extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Color(0xFF1A2744), AppTokens.ink],
+          colors: [Color(0xFF1A2744), Color(0xFF0D1117)],
         ),
       ),
       child: CustomPaint(
@@ -175,8 +177,8 @@ class _SilhouettePainter extends CustomPainter {
     final cx = size.width / 2;
     final head = Rect.fromCenter(
       center: Offset(cx, size.height * 0.32),
-      width: size.width * 0.22,
-      height: size.height * 0.12,
+      width: size.width * 0.14,
+      height: size.height * 0.20,
     );
     canvas.drawOval(head, paint);
 

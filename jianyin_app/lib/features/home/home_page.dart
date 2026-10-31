@@ -38,7 +38,6 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _leaveTo(String route) async {
-    // Leave Home = full stop (camera via widget dispose; WS + REST here).
     await _session.stop();
     if (!mounted) return;
     context.go(route);
@@ -56,12 +55,11 @@ class _HomePageState extends State<HomePage> {
         body: ListenableBuilder(
           listenable: _session,
           builder: (context, _) {
-            final meta = _session.meta;
+            final senseMeta = _session.meta;
             final hintText = _showUpperBodyHint
                 ? '请把头部、双肩和双手一起放入画面'
-                : meta.hint;
-            final hintTone =
-                _showUpperBodyHint ? HintTone.warn : meta.hintTone;
+                : senseMeta.hint;
+            final hintTone = _showUpperBodyHint ? HintTone.warn : senseMeta.hintTone;
             return Stack(
               fit: StackFit.expand,
               children: [
@@ -73,38 +71,51 @@ class _HomePageState extends State<HomePage> {
                   },
                   onLandmarks: _session.onLandmarks,
                 ),
-                ViewpointOverlay(
-                  offline: _session.vpOffline,
-                  caption: _session.vpCaption,
-                ),
-                Positioned(
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  child: _CameraTopbar(
-                    status: _session.sense,
-                    onProfile: () => _leaveTo(AppRoutes.profile),
-                    onSettings: () => _leaveTo(AppRoutes.settings),
-                  ),
-                ),
-                Positioned(
-                  left: AppTokens.space5,
-                  right: AppTokens.space5,
-                  top: MediaQuery.paddingOf(context).top + 72,
-                  child: _CameraHint(
-                    text: hintText,
-                    tone: hintTone,
-                  ),
-                ),
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  height: CaptionZone.heightDp,
-                  child: CaptionZone(
-                    history: _session.captionHistory,
-                    current: _session.currentCaption,
-                  ),
+                ListenableBuilder(
+                  listenable: _session.faceTracker,
+                  builder: (context, _) {
+                    final faceTracker = _session.faceTracker;
+                    final screenW = MediaQuery.sizeOf(context).width;
+                    return Stack(
+                      children: [
+                        ViewpointOverlay(
+                          offline: _session.vpOffline,
+                          caption: _session.vpCaption,
+                          faceTracker: faceTracker,
+                          screenWidthDp: screenW,
+                        ),
+                        Positioned(
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          child: _CameraTopbar(
+                            status: _session.sense,
+                            onProfile: () => _leaveTo(AppRoutes.profile),
+                            onSettings: () => _leaveTo(AppRoutes.settings),
+                          ),
+                        ),
+                        Positioned(
+                          left: AppTokens.space5,
+                          right: AppTokens.space5,
+                          top: MediaQuery.paddingOf(context).top + 72,
+                          child: _CameraHint(
+                            text: hintText,
+                            tone: hintTone,
+                          ),
+                        ),
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          height: CaptionZone.heightDp,
+                          child: CaptionZone(
+                            history: _session.captionHistory,
+                            current: _session.currentCaption,
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 ),
               ],
             );
