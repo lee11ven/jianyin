@@ -5,6 +5,37 @@ import { getSession, touchSession } from '../session/store.js';
 import { synthesizePcmChunks } from '../pipeline/tts.js';
 import { markAlive } from './heartbeat.js';
 
+const ENVELOPE_ID = 'gesture_skeleton_envelope_v1';
+
+/**
+ * Pretty-print App uplink envelopes / landmarks to the gateway console.
+ * @param {import('ws').WebSocket} ws
+ * @param {object} msg
+ */
+function logAppEnvelope(ws, msg) {
+  const role = ws.role || 'unknown';
+  if (role !== 'app') return;
+
+  const sid = ws.sessionId || msg.sessionId || '-';
+  const envelope = msg.envelope;
+  const kind = msg.kind;
+  const type = msg.type;
+
+  // Wire format is compact JSON (no whitespace); log the same way.
+  if (envelope === ENVELOPE_ID) {
+    console.log(
+      `[ws/app] envelope sid=${sid} kind=${kind || '?'} ts=${msg.ts ?? '-'} ${JSON.stringify(msg)}`,
+    );
+    return;
+  }
+
+  if (type === 'landmarks') {
+    console.log(
+      `[ws/app] landmarks sid=${sid} ts=${msg.ts ?? '-'} schema=${msg.schema || '?'} ${JSON.stringify(msg)}`,
+    );
+  }
+}
+
 /**
  * @param {object} deps
  * @param {import('../pipeline/recognition.js').RecognitionPipeline} deps.recognition
@@ -22,7 +53,7 @@ export function createMessageHandler({ recognition }) {
     }
 
     const type = msg?.type;
-    if (!type) return;
+    const isEnvelope = msg?.envelope === ENVELOPE_ID;
 
     if (type === 'ping') {
       sendJson(ws, frame('pong', { sessionId: ws.sessionId }));
@@ -32,6 +63,18 @@ export function createMessageHandler({ recognition }) {
     if (ws.sessionId) {
       touchSession(ws.sessionId);
     }
+
+    // Catalog / frame envelopes have no `type`; landmarks use type=landmarks.
+    if (isEnvelope || type === 'landmarks') {
+      logAppEnvelope(ws, msg);
+    }
+
+    if (isEnvelope) {
+      // Accepted for logging / future recognition; no mock emit.
+      return;
+    }
+
+    if (!type) return;
 
     if (type === 'landmarks') {
       if (!ws.sessionId) return;
@@ -45,7 +88,7 @@ export function createMessageHandler({ recognition }) {
     }
 
     if (type === 'device.status') {
-      // Accepted from edge/wearable; no-op beyond activity touch for demo.
+      // Accepted from edge/wearable; activity already touched above.
       return;
     }
 

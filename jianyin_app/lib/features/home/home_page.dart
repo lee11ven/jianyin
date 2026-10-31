@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -38,7 +39,9 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _leaveTo(String route) async {
-    await _session.stop();
+    // Don't await stop — WS/API teardown can take seconds after the camera
+    // is already cleared, which leaves a blank home frame (feels like 白屏).
+    unawaited(_session.stop());
     if (!mounted) return;
     context.go(route);
   }

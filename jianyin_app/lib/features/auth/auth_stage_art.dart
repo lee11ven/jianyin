@@ -49,24 +49,36 @@ class AuthOverlapScaffold extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppTokens.ink,
       resizeToAvoidBottomInset: true,
-      body: Column(
-        children: [
-          const Expanded(child: _AuthStageBackground()),
-          _AuthOverlapAnchor(
-            sink: _sink,
-            widthFactor: _widthFactor,
-            bodyAsset: _bodyAsset,
-            elbowsAsset: _elbowsAsset,
-            semanticLabel: _semanticLabel,
-            panelPadding: EdgeInsets.fromLTRB(
-              AppTokens.space5,
-              panelPaddingTop,
-              AppTokens.space5,
-              AppTokens.space5 + bottomInset,
-            ),
-            child: child,
-          ),
-        ],
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          // Keep a short stage strip so the mascot stays visible; panel scrolls.
+          final panelMaxHeight = math.max(
+            constraints.maxHeight * 0.78,
+            constraints.maxHeight - 120,
+          );
+          return Column(
+            children: [
+              const Expanded(child: _AuthStageBackground()),
+              ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: panelMaxHeight),
+                child: _AuthOverlapAnchor(
+                  sink: _sink,
+                  widthFactor: _widthFactor,
+                  bodyAsset: _bodyAsset,
+                  elbowsAsset: _elbowsAsset,
+                  semanticLabel: _semanticLabel,
+                  panelPadding: EdgeInsets.fromLTRB(
+                    AppTokens.space5,
+                    panelPaddingTop,
+                    AppTokens.space5,
+                    AppTokens.space5 + bottomInset,
+                  ),
+                  child: child,
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

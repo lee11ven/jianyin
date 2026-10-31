@@ -71,6 +71,7 @@ class _LoginPageState extends State<LoginPage> {
     return AuthOverlapScaffold(
       kind: AuthStageKind.hello,
       child: SingleChildScrollView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         child: AutofillGroup(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,

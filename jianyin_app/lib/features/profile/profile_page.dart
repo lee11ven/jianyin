@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../router/app_router.dart';
 import '../../session/auth_store.dart';
 import '../../session/session_models.dart';
 import '../../theme/tokens.dart';
-import '../../widgets/app_badge.dart';
-import '../../widgets/app_header.dart';
-import '../../widgets/list_nav_tile.dart';
+import 'profile_widgets.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -54,13 +53,37 @@ class _ProfilePageState extends State<ProfilePage> {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = e is ApiException ? e.message : '加载失败';
+        _error = e is ApiException ? e.message : '加载失败，下拉可重试';
         _user ??= _auth.user;
       });
     }
   }
 
+  Future<void> _openDetail() async {
+    await context.push(AppRoutes.profileDetail);
+    if (mounted) await _load();
+  }
+
   Future<void> _logout() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('退出登录'),
+        content: const Text('退出后需重新登录才能使用识别。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: AppTokens.danger),
+            child: const Text('退出'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
     await _auth.clear();
     if (!mounted) return;
     context.go(AppRoutes.login);
@@ -68,129 +91,159 @@ class _ProfilePageState extends State<ProfilePage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppTokens.paper,
-      body: Column(
-        children: [
-          AppHeader(
-            title: '个人中心',
-            onBack: () => context.go(AppRoutes.home),
-          ),
-          Expanded(
-            child: ListView(
-              padding: EdgeInsets.fromLTRB(
-                AppTokens.space4,
-                AppTokens.space4,
-                AppTokens.space4,
-                AppTokens.space6 + MediaQuery.paddingOf(context).bottom,
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light.copyWith(
+        statusBarColor: Colors.transparent,
+      ),
+      child: Scaffold(
+        backgroundColor: AppTokens.paper,
+        body: RefreshIndicator(
+          color: AppTokens.teal,
+          onRefresh: _load,
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
+              SliverToBoxAdapter(
+                child: ProfileInkStage(
+                  user: _user,
+                  padTopSafeArea: true,
+                  actionLabel: '查看与编辑资料',
+                  onTap: _user == null ? null : _openDetail,
+                  leading: _InkBackButton(
+                    onPressed: () => context.go(AppRoutes.home),
+                  ),
+                ),
               ),
-              children: [
-                if (_loading && _user == null)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 48),
-                    child: Center(child: CircularProgressIndicator()),
-                  )
-                else ...[
-                  _ProfileHero(user: _user),
-                  if (_error != null) ...[
-                    const SizedBox(height: AppTokens.space3),
-                    Text(
-                      _error!,
-                      style: const TextStyle(
-                        color: AppTokens.danger,
-                        fontSize: AppTokens.textSm,
+              SliverPadding(
+                padding: EdgeInsets.fromLTRB(
+                  AppTokens.space4,
+                  AppTokens.space5,
+                  AppTokens.space4,
+                  AppTokens.space6 + MediaQuery.paddingOf(context).bottom,
+                ),
+                sliver: SliverList(
+                  delegate: SliverChildListDelegate([
+                    if (_loading && _user == null)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 48),
+                        child: Center(child: CircularProgressIndicator()),
+                      )
+                    else ...[
+                      if (_error != null) ...[
+                        _ErrorBanner(message: _error!, onRetry: _load),
+                        const SizedBox(height: AppTokens.space4),
+                      ],
+                      const ProfileSectionLabel('功能与服务'),
+                      ProfileSheet(
+                        children: [
+                          ProfileDestinationTile(
+                            label: '个人信息',
+                            subtitle: '昵称、性别与账号',
+                            icon: Icons.person_outline_rounded,
+                            onTap: _openDetail,
+                          ),
+                          ProfileDestinationTile(
+                            label: '历史字幕',
+                            subtitle: '按日查看与导出',
+                            icon: Icons.subtitles_outlined,
+                            onTap: () => context.push(AppRoutes.history),
+                          ),
+                          ProfileDestinationTile(
+                            label: '开通会员',
+                            subtitle: _user?.planLabel ?? '免费版',
+                            icon: Icons.workspace_premium_outlined,
+                            accent: true,
+                            onTap: () => context.push(AppRoutes.membership),
+                          ),
+                        ],
                       ),
-                    ),
-                  ],
-                  const SizedBox(height: AppTokens.space5),
-                  ListNavGroup(
-                    children: [
-                      ListNavTile(
-                        label: '历史对话文本字幕',
-                        icon: Icons.description_outlined,
-                        onTap: () => context.push(AppRoutes.history),
-                      ),
-                      ListNavTile(
-                        label: '开通会员',
-                        icon: Icons.workspace_premium_outlined,
-                        onTap: () => context.push(AppRoutes.membership),
-                      ),
-                      ListNavTile(
-                        label: '退出登录',
-                        icon: Icons.logout,
-                        danger: true,
-                        onTap: _logout,
+                      const SizedBox(height: AppTokens.space5),
+                      const ProfileSectionLabel('账号'),
+                      ProfileSheet(
+                        children: [
+                          ProfileDestinationTile(
+                            label: '退出登录',
+                            subtitle: '清除本机登录状态',
+                            icon: Icons.logout_rounded,
+                            danger: true,
+                            onTap: _logout,
+                          ),
+                        ],
                       ),
                     ],
-                  ),
-                ],
-              ],
-            ),
+                  ]),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
 }
 
-class _ProfileHero extends StatelessWidget {
-  const _ProfileHero({required this.user});
+class _InkBackButton extends StatelessWidget {
+  const _InkBackButton({required this.onPressed});
 
-  final UserProfile? user;
+  final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
-    final name = user?.username.isNotEmpty == true ? user!.username : '未登录';
-    final phone = user?.maskedPhone ?? '—';
-    final letter = user?.avatarLetter ?? '?';
-    final plan = user?.planLabel ?? '免费版';
+    return Material(
+      color: Colors.white.withValues(alpha: 0.12),
+      shape: const CircleBorder(),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onPressed,
+        child: const SizedBox(
+          width: AppTokens.touchMin,
+          height: AppTokens.touchMin,
+          child: Icon(
+            Icons.chevron_left_rounded,
+            color: AppTokens.fgOnInk,
+            size: 28,
+          ),
+        ),
+      ),
+    );
+  }
+}
 
-    return Row(
-      children: [
-        Container(
-          width: 64,
-          height: 64,
-          alignment: Alignment.center,
-          decoration: const BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [AppTokens.teal, Color(0xFF134E4A)],
-            ),
-          ),
-          child: Text(
-            letter,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: AppTokens.textXl,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
+class _ErrorBanner extends StatelessWidget {
+  const _ErrorBanner({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      liveRegion: true,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(AppTokens.space3),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFEE2E2),
+          borderRadius: BorderRadius.circular(AppTokens.radiusSm),
         ),
-        const SizedBox(width: AppTokens.space4),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                name,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontSize: AppTokens.textLg,
-                      fontWeight: FontWeight.w700,
-                    ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(
+                  color: AppTokens.danger,
+                  fontSize: AppTokens.textSm,
+                ),
               ),
-              const SizedBox(height: 2),
-              Text(
-                phone,
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              const SizedBox(height: AppTokens.space2),
-              AppBadge(label: plan),
-            ],
-          ),
+            ),
+            TextButton(
+              onPressed: onRetry,
+              child: const Text('重试'),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }

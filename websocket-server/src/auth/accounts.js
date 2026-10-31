@@ -84,14 +84,9 @@ export function findUserById(userId) {
 /**
  * @returns {object} stored user
  */
-export function registerAccount({ phone, password, username, sex }) {
+export function registerAccount({ phone, password }) {
   const p = assertValidPhone(phone);
   const pw = assertValidPassword(password);
-  const sx = normalizeSex(sex);
-  const name =
-    username != null && String(username).trim()
-      ? String(username).trim().slice(0, 32)
-      : defaultUsername(p);
 
   if (findUserByPhone(p)) {
     const err = new Error('phone already registered');
@@ -106,8 +101,8 @@ export function registerAccount({ phone, password, username, sex }) {
   const user = {
     userId,
     phone: p,
-    username: name,
-    sex: sx,
+    username: defaultUsername(p),
+    sex: 'unknown',
     salt,
     passwordHash,
     createdAt: Date.now(),

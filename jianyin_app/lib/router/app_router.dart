@@ -6,6 +6,8 @@ import '../features/auth/register_page.dart';
 import '../features/history/history_page.dart';
 import '../features/home/home_page.dart';
 import '../features/membership/membership_page.dart';
+import '../features/profile/profile_detail_page.dart';
+import '../features/profile/profile_edit_page.dart';
 import '../features/profile/profile_page.dart';
 import '../features/settings/settings_page.dart';
 
@@ -14,6 +16,8 @@ abstract final class AppRoutes {
   static const register = '/register';
   static const home = '/home';
   static const profile = '/profile';
+  static const profileDetail = '/profile/detail';
+  static const profileEdit = '/profile/edit';
   static const settings = '/settings';
   static const history = '/history';
   static const membership = '/membership';
@@ -87,6 +91,20 @@ final GoRouter appRouter = GoRouter(
       pageBuilder: (context, state) => _slideFromRight(
         state: state,
         child: const ProfilePage(),
+      ),
+    ),
+    GoRoute(
+      path: AppRoutes.profileDetail,
+      pageBuilder: (context, state) => _slideFromRight(
+        state: state,
+        child: const ProfileDetailPage(),
+      ),
+    ),
+    GoRoute(
+      path: AppRoutes.profileEdit,
+      pageBuilder: (context, state) => _slideFromRight(
+        state: state,
+        child: const ProfileEditPage(),
       ),
     ),
     GoRoute(

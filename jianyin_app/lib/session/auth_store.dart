@@ -110,19 +110,22 @@ class AuthStore {
     return prefs.getString(_phoneKey);
   }
 
+  /// Sends OTP; returns debug code when present (dev only).
+  Future<String?> sendOtp({required String phone}) {
+    return _api.sendOtp(phone: phone.trim());
+  }
+
   Future<AuthToken> register({
     required String phone,
     required String password,
-    String? username,
-    String? sex,
+    required String code,
   }) async {
     final deviceId = await this.deviceId();
     final issued = await _api.register(
       phone: phone.trim(),
       password: password,
+      code: code.trim(),
       deviceId: deviceId,
-      username: username?.trim(),
-      sex: sex,
     );
     await save(issued);
     return issued;
@@ -148,6 +151,23 @@ class AuthStore {
       throw const ApiException(code: 'unauthorized', message: '请先登录');
     }
     final profile = await _api.me(token: t);
+    await setUser(profile);
+    return profile;
+  }
+
+  Future<UserProfile> updateProfile({
+    String? username,
+    String? sex,
+  }) async {
+    final t = token;
+    if (t == null) {
+      throw const ApiException(code: 'unauthorized', message: '请先登录');
+    }
+    final profile = await _api.patchMe(
+      token: t,
+      username: username,
+      sex: sex,
+    );
     await setUser(profile);
     return profile;
   }

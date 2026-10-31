@@ -15,12 +15,23 @@ class ApiClient {
     return _decodeMap(res);
   }
 
+  /// Returns debug OTP when server includes `code` (non-production only).
+  Future<String?> sendOtp({required String phone}) async {
+    final res = await _http.post(
+      ApiConfig.restUri('/api/v1/auth/send-otp'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'phone': phone}),
+    );
+    final map = _decodeMap(res);
+    final code = map['code'];
+    return code is String && code.isNotEmpty ? code : null;
+  }
+
   Future<AuthToken> register({
     required String phone,
     required String password,
+    required String code,
     required String deviceId,
-    String? username,
-    String? sex,
   }) async {
     final res = await _http.post(
       ApiConfig.restUri('/api/v1/auth/register'),
@@ -28,9 +39,8 @@ class ApiClient {
       body: jsonEncode({
         'phone': phone,
         'password': password,
+        'code': code,
         'deviceId': deviceId,
-        if (username != null && username.isNotEmpty) 'username': username,
-        if (sex != null) 'sex': sex,
       }),
     );
     final map = _decodeMap(res, ok: const {200, 201});

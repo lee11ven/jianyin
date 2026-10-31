@@ -7,6 +7,7 @@ import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../config/api_config.dart';
+import 'compact_json.dart';
 import 'ws_events.dart';
 
 enum AppWsState { idle, connecting, open, reconnecting, closed }
@@ -124,7 +125,7 @@ class AppWsClient {
     _pendingLandmarks = null;
     _sendingLandmarks = true;
     try {
-      _channel?.sink.add(jsonEncode(next));
+      _channel?.sink.add(encodeCompactWsJson(next));
       _touchAlive();
     } catch (e) {
       debugPrint('WS landmarks send failed: $e');
@@ -142,7 +143,7 @@ class AppWsClient {
     if (_catalogSent || state != AppWsState.open) return;
     _catalogSent = true;
     try {
-      _channel?.sink.add(jsonEncode({
+      _channel?.sink.add(encodeCompactWsJson({
         'envelope': 'gesture_skeleton_envelope_v1',
         'kind': 'catalog',
         'ts': DateTime.now().millisecondsSinceEpoch,
@@ -157,7 +158,7 @@ class AppWsClient {
   void sendEnvelopeFrame(Map<String, dynamic> frame) {
     if (state != AppWsState.open) return;
     try {
-      _channel?.sink.add(jsonEncode(frame));
+      _channel?.sink.add(encodeCompactWsJson(frame));
       _touchAlive();
     } catch (e) {
       debugPrint('WS envelope frame send failed: $e');

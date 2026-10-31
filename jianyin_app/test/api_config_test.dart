@@ -20,7 +20,7 @@ void main() {
 
   test('appWsUri does not put JWT in query', () {
     final uri = ApiConfig.appWsUri(
-      wsUrl: 'ws://192.168.1.100:8000/ws/app',
+      wsUrl: 'ws://186.241.105.178:8800/ws/app',
       deviceId: 'app-demo',
       sessionId: 'sess-1',
     );
@@ -55,7 +55,7 @@ void main() {
     final session = SessionInfo.fromJson({
       'sessionId': 'sess-x',
       'protocolVersion': 1,
-      'wsUrl': 'ws://192.168.1.100:8000/ws/app',
+      'wsUrl': 'ws://186.241.105.178:8800/ws/app',
     });
     expect(session.sessionId, 'sess-x');
   });

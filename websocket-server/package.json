@@ -6,7 +6,9 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "dev": "node --watch src/index.js"
+    "start:prod": "node --env-file=.env src/index.js",
+    "dev": "node --watch src/index.js",
+    "pack": "node scripts/pack-prod.mjs"
   },
   "engines": {
     "node": ">=18"

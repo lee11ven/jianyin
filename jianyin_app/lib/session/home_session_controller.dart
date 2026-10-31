@@ -76,6 +76,9 @@ class HomeSessionController extends ChangeNotifier {
 
   StreamSubscription<WsEvent>? _wsSub;
   Timer? _retryTimer;
+  /// When Active ticks stop (no person / quiet), fall back to 就绪.
+  Timer? _senseIdleTimer;
+  static const _senseIdleAfter = Duration(milliseconds: 800);
 
   bool _homeActive = false;
   bool _cameraReady = false;
@@ -116,6 +119,8 @@ class HomeSessionController extends ChangeNotifier {
     _homeActive = true;
     _lastErrorHint = null;
     sense = SenseStatus.offline;
+    currentCaption = '';
+    captionHistory = [];
     notifyListeners();
     _wsSub ??= _ws.events.listen(_onWsEvent);
     if (_cameraReady) {
@@ -233,30 +238,75 @@ class HomeSessionController extends ChangeNotifier {
       _ws.sendLandmarks(payload);
     }
 
-    // Update sense status from the payload.
-    final hasHands = payload.containsKey('hands');
-    final path = payload['path'];
-    final pathGap = path is Map && path['gap'] == true;
-    if (hasHands || (path is Map && !pathGap)) {
-      if (sense == SenseStatus.idle || sense == SenseStatus.translating) {
-        sense = SenseStatus.recognizing;
-        notifyListeners();
-      }
-    }
+    _updateSenseFromUplink(payload);
+  }
 
-    // Extract nose position from body frame to drive the viewpoint overlay.
-    final body = payload['body'] as Map<String, dynamic>?;
-    final points = body?['points'] as Map<String, dynamic>?;
-    final nose = points?['nose'] as Map<String, dynamic>?;
-    if (nose != null) {
-      final nx = (nose['x'] as num?)?.toDouble() ?? double.nan;
-      final ny = (nose['y'] as num?)?.toDouble() ?? double.nan;
-      if (!nx.isNaN && !ny.isNaN && nx >= 0 && nx <= 1 && ny >= 0 && ny <= 1) {
-        _faceTracker.update(nx, ny, DateTime.now().millisecondsSinceEpoch);
-      }
-    } else if (body != null) {
+  /// Formal sense rules while Home is active:
+  /// WS down → 掉线; WS up + no person → 就绪; WS up + person → 识别中.
+  void _updateSenseFromUplink(Map<String, dynamic> payload) {
+    final nose = _payloadNose(payload);
+    final hasPerson = nose != null;
+
+    if (hasPerson) {
+      _faceTracker.update(
+        nose.$1,
+        nose.$2,
+        DateTime.now().millisecondsSinceEpoch,
+      );
+    } else {
       _faceTracker.reset();
     }
+
+    if (sense == SenseStatus.offline) return;
+
+    // Keep brief 转译中 until its own settle; still refresh presence watchdog.
+    if (sense == SenseStatus.translating) {
+      _armSenseIdleWatchdog();
+      return;
+    }
+
+    final next =
+        hasPerson ? SenseStatus.recognizing : SenseStatus.idle;
+
+    if (hasPerson) {
+      _armSenseIdleWatchdog();
+    } else {
+      _senseIdleTimer?.cancel();
+      _senseIdleTimer = null;
+    }
+
+    if (next != sense) {
+      sense = next;
+      notifyListeners();
+    }
+  }
+
+  /// Nose in body.points with usable coords → person / portrait present.
+  (double, double)? _payloadNose(Map<String, dynamic> payload) {
+    final body = payload['body'];
+    if (body is! Map) return null;
+    final points = body['points'];
+    if (points is! Map) return null;
+    final nose = points['nose'];
+    if (nose is! Map) return null;
+    final nx = (nose['x'] as num?)?.toDouble();
+    final ny = (nose['y'] as num?)?.toDouble();
+    final nv = (nose['v'] as num?)?.toDouble() ?? 1.0;
+    if (nx == null || ny == null) return null;
+    if (nv <= 0 || nx < 0 || nx > 1 || ny < 0 || ny > 1) return null;
+    return (nx, ny);
+  }
+
+  /// If presence probes stop (camera stall), leave 识别中 → 就绪.
+  void _armSenseIdleWatchdog() {
+    _senseIdleTimer?.cancel();
+    _senseIdleTimer = Timer(_senseIdleAfter, () {
+      if (!_homeActive || !_ws.isOpen) return;
+      if (sense != SenseStatus.recognizing) return;
+      _faceTracker.reset();
+      sense = SenseStatus.idle;
+      notifyListeners();
+    });
   }
 
   void _onWsEvent(WsEvent event) {
@@ -264,6 +314,8 @@ class HomeSessionController extends ChangeNotifier {
       case WsConnected():
         _lastErrorHint = null;
         sense = SenseStatus.idle;
+        currentCaption = '';
+        captionHistory = [];
         notifyListeners();
       case WsDisconnected(:final reason):
         if (!_homeActive) return;
@@ -299,11 +351,13 @@ class HomeSessionController extends ChangeNotifier {
           captionHistory = captionHistory.sublist(captionHistory.length - 4);
         }
         notifyListeners();
-        // Settle back to idle shortly if no further activity.
+        // Leave 转译中; next presence tick restores 识别中/就绪.
         Future<void>.delayed(const Duration(milliseconds: 800), () {
           if (!_homeActive) return;
           if (sense == SenseStatus.translating && _ws.isOpen) {
-            sense = SenseStatus.idle;
+            sense = _faceTracker.hasFace
+                ? SenseStatus.recognizing
+                : SenseStatus.idle;
             currentCaption = '';
             notifyListeners();
           }
@@ -359,6 +413,8 @@ class HomeSessionController extends ChangeNotifier {
     _starting = false;
     _retryTimer?.cancel();
     _retryTimer = null;
+    _senseIdleTimer?.cancel();
+    _senseIdleTimer = null;
     _startAttempt = 0;
 
     final token = _token;
@@ -379,6 +435,7 @@ class HomeSessionController extends ChangeNotifier {
     sense = SenseStatus.offline;
     voice = VoiceStatus.idle;
     currentCaption = '';
+    captionHistory = [];
     _lastErrorHint = null;
     _faceTracker.reset();
     notifyListeners();

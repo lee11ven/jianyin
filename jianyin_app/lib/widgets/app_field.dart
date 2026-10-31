@@ -17,6 +17,8 @@ class AppField extends StatelessWidget {
     this.maxLength,
     this.onSubmitted,
     this.enabled = true,
+    this.digitsOnly = false,
+    this.trailing,
   });
 
   final String label;
@@ -30,9 +32,61 @@ class AppField extends StatelessWidget {
   final int? maxLength;
   final ValueChanged<String>? onSubmitted;
   final bool enabled;
+  /// Force digit-only input (also implied for [TextInputType.phone]).
+  final bool digitsOnly;
+  /// Optional action beside the field (e.g. OTP send button).
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
+    final field = TextField(
+      controller: controller,
+      obscureText: obscureText,
+      keyboardType: keyboardType,
+      textInputAction: textInputAction,
+      autofillHints: autofillHints,
+      enabled: enabled,
+      onSubmitted: onSubmitted,
+      maxLength: maxLength,
+      buildCounter: maxLength == null
+          ? null
+          : (
+              context, {
+              required currentLength,
+              required isFocused,
+              required maxLength,
+            }) =>
+              const SizedBox.shrink(),
+      inputFormatters: (digitsOnly || keyboardType == TextInputType.phone)
+          ? [FilteringTextInputFormatter.digitsOnly]
+          : null,
+      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+            color: enabled ? null : AppTokens.fgMuted,
+          ),
+      decoration: InputDecoration(
+        hintText: hint,
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: AppTokens.space4,
+          vertical: 12,
+        ),
+        filled: !enabled,
+        fillColor: enabled ? null : AppTokens.muted,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppTokens.radiusField),
+          borderSide: const BorderSide(color: AppTokens.border),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppTokens.radiusField),
+          borderSide: const BorderSide(color: AppTokens.border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppTokens.radiusField),
+          borderSide: const BorderSide(color: AppTokens.teal),
+        ),
+      ),
+    );
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -44,44 +98,17 @@ class AppField extends StatelessWidget {
               ),
         ),
         const SizedBox(height: AppTokens.space2),
-        TextField(
-          controller: controller,
-          obscureText: obscureText,
-          keyboardType: keyboardType,
-          textInputAction: textInputAction,
-          autofillHints: autofillHints,
-          enabled: enabled,
-          onSubmitted: onSubmitted,
-          maxLength: maxLength,
-          inputFormatters: keyboardType == TextInputType.phone
-              ? [FilteringTextInputFormatter.digitsOnly]
-              : null,
-          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                color: enabled ? null : AppTokens.fgMuted,
-              ),
-          decoration: InputDecoration(
-            hintText: hint,
-            isDense: true,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: AppTokens.space4,
-              vertical: 12,
-            ),
-            filled: !enabled,
-            fillColor: enabled ? null : AppTokens.muted,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(AppTokens.radiusField),
-              borderSide: const BorderSide(color: AppTokens.border),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(AppTokens.radiusField),
-              borderSide: const BorderSide(color: AppTokens.border),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(AppTokens.radiusField),
-              borderSide: const BorderSide(color: AppTokens.teal),
-            ),
+        if (trailing == null)
+          field
+        else
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(child: field),
+              const SizedBox(width: AppTokens.space2),
+              trailing!,
+            ],
           ),
-        ),
       ],
     );
   }

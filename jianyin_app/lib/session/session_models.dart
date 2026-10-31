@@ -39,6 +39,18 @@ class UserProfile {
     }
   }
 
+  String get sexLabel {
+    switch (sex) {
+      case 'male':
+        return '男';
+      case 'female':
+        return '女';
+      case 'unknown':
+      default:
+        return '保密';
+    }
+  }
+
   factory UserProfile.fromJson(Map<String, dynamic> json) {
     return UserProfile(
       userId: '${json['userId'] ?? ''}',

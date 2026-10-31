@@ -21,6 +21,13 @@ String? validatePasswordConfirm(String password, String confirm) {
   return null;
 }
 
+String? validateOtpCode(String value) {
+  final code = value.trim();
+  if (code.isEmpty) return '请输入验证码';
+  if (!RegExp(r'^\d{4,6}$').hasMatch(code)) return '请输入 4–6 位数字验证码';
+  return null;
+}
+
 String authErrorMessage(Object error) {
   if (error is ApiException) {
     switch (error.code) {
@@ -34,6 +41,8 @@ String authErrorMessage(Object error) {
         return '手机号或密码错误';
       case 'unauthorized':
         return '登录已失效，请重新登录';
+      case 'invalid_otp':
+        return '验证码不正确或已过期，请重新获取';
       case 'invalid_sex':
         return '性别参数无效';
       default:

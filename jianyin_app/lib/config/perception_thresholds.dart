@@ -7,6 +7,7 @@ class PerceptionThresholds {
     this.sMin = 80.0,
     this.tOnset = 12.0,
     this.tQuietMs = 800,
+    this.deltaIdleMs = 120,
     this.deltaActiveMs = 40,
     this.nStableHand = 3,
     this.vMinJoint = 0.5,
@@ -36,6 +37,9 @@ class PerceptionThresholds {
 
   /// Quiet duration to return Idle.
   final int tQuietMs;
+
+  /// Min interval between Idle presence-probe ticks (~8 Hz).
+  final int deltaIdleMs;
 
   /// Min interval between Active ticks (~25 Hz).
   final int deltaActiveMs;

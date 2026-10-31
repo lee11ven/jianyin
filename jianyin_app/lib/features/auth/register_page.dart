@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -18,32 +20,86 @@ class RegisterPage extends StatefulWidget {
 }
 
 class _RegisterPageState extends State<RegisterPage> {
-  final _username = TextEditingController();
   final _phone = TextEditingController();
+  final _code = TextEditingController();
   final _password = TextEditingController();
   final _password2 = TextEditingController();
   final _auth = AuthStore();
 
-  String _sex = 'unknown';
   bool _busy = false;
+  bool _sendingOtp = false;
+  int _otpCooldown = 0;
+  Timer? _otpTimer;
   String? _error;
 
   @override
   void dispose() {
-    _username.dispose();
+    _otpTimer?.cancel();
     _phone.dispose();
+    _code.dispose();
     _password.dispose();
     _password2.dispose();
     super.dispose();
   }
 
+  void _startOtpCooldown([int seconds = 60]) {
+    _otpTimer?.cancel();
+    setState(() => _otpCooldown = seconds);
+    _otpTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (_otpCooldown <= 1) {
+        timer.cancel();
+        setState(() => _otpCooldown = 0);
+        return;
+      }
+      setState(() => _otpCooldown -= 1);
+    });
+  }
+
+  Future<void> _sendOtp() async {
+    final phoneErr = validatePhone(_phone.text);
+    if (phoneErr != null) {
+      setState(() => _error = phoneErr);
+      return;
+    }
+    if (_sendingOtp || _otpCooldown > 0 || _busy) return;
+
+    setState(() {
+      _sendingOtp = true;
+      _error = null;
+    });
+
+    try {
+      final debugCode = await _auth.sendOtp(phone: _phone.text);
+      if (!mounted) return;
+      _startOtpCooldown();
+      if (debugCode != null && debugCode.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('调试验证码：$debugCode')),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = authErrorMessage(e));
+    } finally {
+      if (mounted) setState(() => _sendingOtp = false);
+    }
+  }
+
   Future<void> _submit() async {
     final phoneErr = validatePhone(_phone.text);
+    final codeErr = validateOtpCode(_code.text);
     final passErr = validatePassword(_password.text, isNew: true);
     final confirmErr =
         validatePasswordConfirm(_password.text, _password2.text);
-    if (phoneErr != null || passErr != null || confirmErr != null) {
-      setState(() => _error = phoneErr ?? passErr ?? confirmErr);
+    if (phoneErr != null ||
+        codeErr != null ||
+        passErr != null ||
+        confirmErr != null) {
+      setState(() => _error = phoneErr ?? codeErr ?? passErr ?? confirmErr);
       return;
     }
 
@@ -56,8 +112,7 @@ class _RegisterPageState extends State<RegisterPage> {
       await _auth.register(
         phone: _phone.text,
         password: _password.text,
-        username: _username.text.trim().isEmpty ? null : _username.text,
-        sex: _sex,
+        code: _code.text.trim(),
       );
       if (!mounted) return;
       context.go(AppRoutes.home);
@@ -71,9 +126,15 @@ class _RegisterPageState extends State<RegisterPage> {
 
   @override
   Widget build(BuildContext context) {
+    final otpBusy = _sendingOtp || _otpCooldown > 0 || _busy;
+    final otpLabel = _sendingOtp
+        ? '发送中…'
+        : (_otpCooldown > 0 ? '${_otpCooldown}s' : '获取验证码');
+
     return AuthOverlapScaffold(
       kind: AuthStageKind.happiness,
       child: SingleChildScrollView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         child: AutofillGroup(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -87,14 +148,6 @@ class _RegisterPageState extends State<RegisterPage> {
               ),
               const SizedBox(height: AppTokens.space5),
               AppField(
-                label: '昵称（可选）',
-                controller: _username,
-                hint: '默认：用户+手机后四位',
-                textInputAction: TextInputAction.next,
-                autofillHints: const [AutofillHints.nickname],
-              ),
-              const SizedBox(height: AppTokens.space4),
-              AppField(
                 label: '手机号',
                 controller: _phone,
                 hint: '请输入手机号',
@@ -103,29 +156,36 @@ class _RegisterPageState extends State<RegisterPage> {
                 autofillHints: const [AutofillHints.username],
               ),
               const SizedBox(height: AppTokens.space4),
-              Text(
-                '性别',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w500,
+              AppField(
+                label: '验证码',
+                controller: _code,
+                hint: '请输入验证码',
+                keyboardType: TextInputType.number,
+                textInputAction: TextInputAction.next,
+                digitsOnly: true,
+                maxLength: 6,
+                autofillHints: const [AutofillHints.oneTimeCode],
+                trailing: SizedBox(
+                  height: AppTokens.touchMin,
+                  child: TextButton(
+                    onPressed: otpBusy ? null : _sendOtp,
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppTokens.teal,
+                      disabledForegroundColor: AppTokens.fgMuted,
+                      minimumSize: const Size(96, AppTokens.touchMin),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppTokens.space3,
+                      ),
                     ),
-              ),
-              const SizedBox(height: AppTokens.space2),
-              Wrap(
-                spacing: AppTokens.space2,
-                children: [
-                  for (final opt in const [
-                    ('unknown', '保密'),
-                    ('male', '男'),
-                    ('female', '女'),
-                  ])
-                    ChoiceChip(
-                      label: Text(opt.$2),
-                      selected: _sex == opt.$1,
-                      onSelected: _busy
-                          ? null
-                          : (_) => setState(() => _sex = opt.$1),
+                    child: Text(
+                      otpLabel,
+                      style: const TextStyle(
+                        fontSize: AppTokens.textSm,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                ],
+                  ),
+                ),
               ),
               const SizedBox(height: AppTokens.space4),
               AppField(

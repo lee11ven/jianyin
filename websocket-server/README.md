@@ -18,6 +18,48 @@ npm start
 | `HOST` | `0.0.0.0` | 必须绑定 `0.0.0.0` 才能被局域网访问 |
 | `PORT` | `8000` | HTTP / WS 共用端口 |
 | `NODE_ENV` | `development` | `production` 时关闭 demo-token |
+| `JWT_SECRET` | 开发默认值 | **正式服必须改成强随机串** |
+
+## 正式服打包
+
+本机生成可上传的 zip（不含 `node_modules` / `.env` / 本地 `data`）：
+
+```bash
+cd websocket-server
+npm run pack
+# 产物：dist/websocket-server-v1.0.0-YYYYMMDD.zip
+```
+
+## 正式服部署与启动
+
+```bash
+# 1) 上传并解压 zip
+unzip websocket-server-v1.0.0-YYYYMMDD.zip
+cd websocket-server-v1.0.0-YYYYMMDD
+
+# 2) 配置环境
+cp .env.production.example .env
+# 编辑 .env：NODE_ENV=production，并修改 JWT_SECRET
+
+# 3) 安装生产依赖
+npm ci --omit=dev
+
+# 4) 启动（任选其一）
+npm run start:prod
+# 等价：node --env-file=.env src/index.js
+
+# 后台（nohup）
+mkdir -p logs
+nohup node --env-file=.env src/index.js >> logs/gateway.log 2>&1 &
+echo $! > gateway.pid
+
+# 或 PM2
+pm2 start src/index.js --name jianyin-ws --node-args="--env-file=.env"
+pm2 save && pm2 startup
+```
+
+健康检查：`curl http://127.0.0.1:8000/health`  
+`NODE_ENV=production` 时 `demo-token` 接口不可用。请定期备份 `data/`。
 
 ## 局域网访问
 
@@ -64,4 +106,4 @@ curl -s -X POST http://127.0.0.1:8000/api/v1/sessions ^
 
 **WS**：`/ws/app`、`/ws/edge`、`/ws/wearable`
 
-识别与 TTS 为演示 mock，可替换 `src/pipeline/recognition.js` 与 `src/pipeline/tts.js`。
+识别与 TTS 管道为占位 stub（不再下发假字幕 / 假音频），可替换 `src/pipeline/recognition.js` 与 `src/pipeline/tts.js`。

@@ -87,20 +87,22 @@ class FrameSampler {
     if (phase == FrameSamplerPhase.idle) {
       if (_onsetStreak >= 2) {
         phase = FrameSamplerPhase.active;
-      } else {
-        return;
       }
     } else {
       final quiet = _lastMotionAt == null ||
           now.difference(_lastMotionAt!).inMilliseconds >= thresholds.tQuietMs;
       if (quiet && !moving) {
         phase = FrameSamplerPhase.idle;
-        return;
       }
     }
 
+    // Idle: low-rate presence probe (person → 识别中 / none → 就绪).
+    // Active: full perception tick cadence.
+    final presenceOnly = phase == FrameSamplerPhase.idle;
+    final minInterval =
+        presenceOnly ? thresholds.deltaIdleMs : thresholds.deltaActiveMs;
     if (_lastTickAt != null &&
-        now.difference(_lastTickAt!).inMilliseconds < thresholds.deltaActiveMs) {
+        now.difference(_lastTickAt!).inMilliseconds < minInterval) {
       return;
     }
 
@@ -113,15 +115,16 @@ class FrameSampler {
     );
     if (vision == null) return;
 
-    final omitHands = metrics.sharpness < thresholds.sMin;
+    final omitHands =
+        presenceOnly || metrics.sharpness < thresholds.sMin;
     _lastTickAt = now;
     await onTick(
       FrameTickRequest(
         ts: ts,
         frame: vision,
-        handState: handState,
+        handState: presenceOnly ? HandState.none : handState,
         omitHands: omitHands,
-        forcePathGap: false,
+        forcePathGap: presenceOnly,
         sharpness: metrics.sharpness,
         motionEnergy: metrics.motionEnergy,
       ),

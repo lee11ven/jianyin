@@ -11,7 +11,9 @@
 | 平面 | 技术 | 用途 |
 |------|------|------|
 | 控制 | **REST + JSON** | 鉴权、会话、词表、设备、历史、会员 |
-| 实时 | **WebSocket** | landmarks 上行；recognition / 音频流下行 |
+| 实时 | **WebSocket** | landmarks / 信封上行；recognition / 音频流下行 |
+
+WebSocket 文本帧的 JSON **必须为压缩格式**（无空格/换行缩进）；坐标等浮点建议保留不超过 4 位小数。禁止 pretty-print 上行。
 
 WS 文本帧公共字段：
 
@@ -301,17 +303,10 @@ Query 可选：`from`、`to`（`YYYY-MM-DD`，含端点）。
 
 ### `landmarks`
 
+线上传输示例（压缩 JSON，单行无空白；文档中的多行写法仅便于阅读）：
+
 ```json
-{
-  "type": "landmarks",
-  "protocolVersion": 1,
-  "ts": 0,
-  "sessionId": "sess-xxx",
-  "schema": "mediapipe_hands_v1",
-  "points": [
-    { "x": 0.12, "y": 0.34, "z": 0.01, "v": 1.0 }
-  ]
-}
+{"type":"landmarks","protocolVersion":1,"ts":0,"sessionId":"sess-xxx","schema":"mediapipe_hands_v1","points":[{"x":0.12,"y":0.34,"z":0.01,"v":1}]}
 ```
 
 - `schema` 标识关键点布局。`mediapipe_hands_v1` 只表示双手 42 点，语义保持不变。

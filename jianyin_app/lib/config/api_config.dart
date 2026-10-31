@@ -1,13 +1,13 @@
 /// Local / LAN gateway endpoints (protocolVersion: 1).
 ///
 /// Override at build time:
-/// `flutter run --dart-define=API_BASE_URL=http://192.168.1.100:8000`
+/// `flutter run --dart-define=API_BASE_URL=http://186.241.105.178:8800`
 abstract final class ApiConfig {
   static const protocolVersion = 1;
 
   static const baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://192.168.1.100:8000',
+    defaultValue: 'http://186.241.105.178:8800',
   );
 
   /// Fallback WS path when REST `wsUrl` is missing (should not happen).

@@ -1,6 +1,7 @@
 import { Router } from 'express';
-import { config } from '../config.js';
+import { config, isDebugBuild } from '../config.js';
 import {
+  assertValidPhone,
   authenticateAccount,
   findUserById,
   registerAccount,
@@ -27,10 +28,8 @@ import { getHistory } from '../session/history.js';
 import { errorFrame, sendJson } from '../protocol.js';
 import { gesturesCatalog } from '../data/gestures.js';
 import {
-  generateOtpCode,
   storeOtp,
   verifyOtp as verifyOtpEntry,
-  otpRemainingMs,
 } from '../auth/otp_store.js';
 
 function requireAuth(req, res, next) {
@@ -78,7 +77,7 @@ export function createRestRouter(hooks = {}) {
   /**
    * POST /api/v1/auth/send-otp
    * Body: { phone: string }
-   * Response: { sent: true }  (code is NOT returned; in debug only it may be logged)
+   * Response: { sent: true, phone } ; in non-production also includes `code`.
    */
   router.post('/api/v1/auth/send-otp', (req, res) => {
     try {
@@ -86,10 +85,14 @@ export function createRestRouter(hooks = {}) {
       if (!phone || typeof phone !== 'string') {
         return res.status(400).json({ code: 'bad_request', message: 'phone is required' });
       }
-      const normalized = phone.trim();
-      // Only validate length format, not strict 11-digit (allow testing)
-      storeOtp(normalized);
-      res.json({ sent: true, phone: normalized });
+      const normalized = assertValidPhone(phone);
+      const code = storeOtp(normalized);
+      const payload = { sent: true, phone: normalized };
+      if (isDebugBuild()) {
+        payload.code = code;
+        console.log(`[otp] ${normalized} => ${code}`);
+      }
+      res.json(payload);
     } catch (err) {
       sendAuthError(res, err);
     }
@@ -123,12 +126,12 @@ export function createRestRouter(hooks = {}) {
 
   /**
    * POST /api/v1/auth/register
-   * Body: { phone, password, code, username?, sex? }
+   * Body: { phone, password, code, deviceId? }
    * Requires a valid OTP for the phone number (sent via send-otp).
    */
   router.post('/api/v1/auth/register', (req, res) => {
     try {
-      const { phone, password, code, username, sex, deviceId } = req.body || {};
+      const { phone, password, code, deviceId } = req.body || {};
       if (!phone || !password || !code) {
         return res.status(400).json({
           code: 'bad_request',
@@ -142,7 +145,7 @@ export function createRestRouter(hooks = {}) {
           message: '验证码不正确或已过期，请重新获取',
         });
       }
-      const account = registerAccount({ phone, password, username, sex });
+      const account = registerAccount({ phone, password });
       res.status(201).json(tokenForUser(account, deviceId));
     } catch (err) {
       sendAuthError(res, err);

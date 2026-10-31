@@ -73,15 +73,6 @@
   }
 
   /* —— Home: captions + camera + status —— */
-  var CAPTION_SNIPPETS = [
-    '你好，很高兴认识你。',
-    '请问洗手间在哪里？',
-    '今天天气不错。',
-    '我想点一杯咖啡。',
-    '谢谢你的帮助。',
-    '我们下午三点见面可以吗？',
-  ];
-
   /* Sense lane: offline | idle(就绪) | recognizing | translating
      Voice lane: idle | speaking — parallel, does not block sense
      Home lifecycle: open rear cam + WS on enter; teardown on leave (see architecture.md) */
@@ -192,66 +183,10 @@
     if (!el) return;
 
     var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    var idx = 0;
-    var charIdx = 0;
-    var current = '';
-    var history = [];
-    var typing = false;
-
-    function render() {
-      var shown = history.concat(current ? [current] : []).join('\n');
-      el.innerHTML =
-        escapeHtml(shown) +
-        (reduceMotion ? '' : '<span class="cursor" aria-hidden="true"></span>');
-      el.scrollTop = el.scrollHeight;
-    }
-
-    function tick() {
-      /* sense offline pauses recognition only; voice can keep speaking */
-      if (homeRuntime.sense === 'offline') {
-        window.setTimeout(tick, 400);
-        return;
-      }
-
-      if (charIdx === 0) {
-        current = '';
-        if (!typing) {
-          setSenseStatus('recognizing');
-        }
-        typing = true;
-      }
-      var snippet = CAPTION_SNIPPETS[idx % CAPTION_SNIPPETS.length];
-      if (charIdx < snippet.length) {
-        if (
-          charIdx === Math.floor(snippet.length * 0.55) &&
-          homeRuntime.sense === 'recognizing'
-        ) {
-          setSenseStatus('translating');
-        }
-        current = snippet.slice(0, charIdx + 1);
-        charIdx += 1;
-        render();
-        window.setTimeout(tick, reduceMotion ? 0 : 48);
-      } else {
-        history.push(snippet);
-        if (history.length > 4) history.shift();
-        current = '';
-        charIdx = 0;
-        idx += 1;
-        typing = false;
-        render();
-
-        /* Voice starts in parallel — does not block next recognize/translate */
-        startVoiceSpeaking(reduceMotion ? 900 : 2200);
-
-        /* Sense continues immediately toward next utterance */
-        setSenseStatus('idle');
-        window.setTimeout(tick, reduceMotion ? 280 : 520);
-      }
-    }
-
-    render();
-    window.setTimeout(tick, 600);
+    /* No mock caption stream — wait for real recognition downlink. */
+    el.innerHTML = reduceMotion
+      ? ''
+      : '<span class="cursor" aria-hidden="true"></span>';
   }
 
   function escapeHtml(s) {
