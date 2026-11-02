@@ -30,7 +30,7 @@
 
 主路径无原视频出端；关键点与日志仍需控制留存；历史默认文本。
 
-**实现现状（2026-11）**：运行期数据当前以 JSON 文件存放在**仓库内**（`websocket-server/data/{users,membership,history}.json`，含手机号与密码哈希），与「控制留存 / 最小化」不一致，须移出版本库（保留示例文件 + `.gitignore`）并限制访问；`GET /api/v1/devices` 目前返回全局设备视图，未按账号过滤（见 [../../api/protocol.md](../../api/protocol.md)「实现现状」）。
+**实现现状（2026-11）**：运行期数据（`websocket-server/data/{users,membership,history}.json`，含手机号与密码哈希）已**移出版本库**（磁盘保留，配 `.gitignore` 与 `data/README.md`）；`GET /api/v1/devices` 已按账号过滤（`listDevices(userId)`）并加单测；`NODE_ENV=production` 下使用默认 JWT 密钥启动即失败（见 [../../api/protocol.md](../../api/protocol.md)「实现现状」）。
 
 ## 开放问题
 

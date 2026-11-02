@@ -1,0 +1,266 @@
+{
+  "generatedAt": "2026-11-02T05:16:03.310Z",
+  "withBuild": true,
+  "overall": "A",
+  "dimensions": {
+    "需求与目标定义": {
+      "grade": "A",
+      "failed": 0,
+      "blocked": 0,
+      "total": 2
+    },
+    "架构与模块化": {
+      "grade": "A",
+      "failed": 0,
+      "blocked": 0,
+      "total": 2
+    },
+    "数据与算法链路": {
+      "grade": "A",
+      "failed": 0,
+      "blocked": 0,
+      "total": 3
+    },
+    "接口与集成": {
+      "grade": "A",
+      "failed": 0,
+      "blocked": 0,
+      "total": 3
+    },
+    "可测试性": {
+      "grade": "A",
+      "failed": 0,
+      "blocked": 0,
+      "total": 5
+    },
+    "性能与可扩展性": {
+      "grade": "A",
+      "failed": 0,
+      "blocked": 0,
+      "total": 4
+    },
+    "安全与隐私": {
+      "grade": "A",
+      "failed": 0,
+      "blocked": 0,
+      "total": 4
+    },
+    "工程规范与文档完备性": {
+      "grade": "A",
+      "failed": 0,
+      "blocked": 0,
+      "total": 3
+    },
+    "风险与开放问题": {
+      "grade": "A",
+      "failed": 0,
+      "blocked": 0,
+      "total": 3
+    }
+  },
+  "checks": [
+    {
+      "dimension": "需求与目标定义",
+      "id": "quantified-targets",
+      "title": "生产级目标已量化（WER 与延迟基线）",
+      "status": "pass",
+      "evidence": "roadmap.md 含 WER 量化值：true；含延迟门限：true"
+    },
+    {
+      "dimension": "需求与目标定义",
+      "id": "one-phase-criteria",
+      "title": "一期完成判据与当前状态一致",
+      "status": "pass",
+      "evidence": "roadmap.md 同时包含「一期完成判据」与其当前状态说明"
+    },
+    {
+      "dimension": "架构与模块化",
+      "id": "module-map",
+      "title": "规划目录与实际位置映射表存在",
+      "status": "pass",
+      "evidence": "modules.md 含「仓库映射」表并覆盖客户端与网关"
+    },
+    {
+      "dimension": "架构与模块化",
+      "id": "service-dirs",
+      "title": "services/inference、services/tts、edge/* 目录已建立",
+      "status": "pass",
+      "evidence": "5 个目录骨架齐备"
+    },
+    {
+      "dimension": "数据与算法链路",
+      "id": "recognition-pipeline",
+      "title": "云端识别管线非占位且可产出结果",
+      "status": "pass",
+      "evidence": "recognition.js 已接特征提取与打分（非空实现）"
+    },
+    {
+      "dimension": "数据与算法链路",
+      "id": "tts-backend-pluggable",
+      "title": "TTS 后端可插拔且默认可在无凭据环境运行",
+      "status": "pass",
+      "evidence": "tts.js 含后端分支：true；config 含 ttsBackend：true"
+    },
+    {
+      "dimension": "数据与算法链路",
+      "id": "e2e-closed-loop",
+      "title": "端到端闭环有自动化门（上行→识别→音频下发）",
+      "status": "pass",
+      "evidence": "test/e2e.test.js 存在"
+    },
+    {
+      "dimension": "接口与集成",
+      "id": "endpoint-consistency",
+      "title": "客户端默认地址与网关默认端口一致",
+      "status": "pass",
+      "evidence": "网关默认端口 8000；客户端默认 http://192.168.1.100:8000（端口 8000）；包含硬编码公网 IP：false"
+    },
+    {
+      "dimension": "接口与集成",
+      "id": "demo-token",
+      "title": "协议声明的 demo-token 在代码中实现且仅 debug 可用",
+      "status": "pass",
+      "evidence": "routes.js 含 demo-token 路由与 debug 判定"
+    },
+    {
+      "dimension": "接口与集成",
+      "id": "no-undeclared-codes",
+      "title": "协议不再声明无实现的错误码",
+      "status": "pass",
+      "evidence": "rate_limited 已从错误码表移除"
+    },
+    {
+      "dimension": "可测试性",
+      "id": "flutter-analyze",
+      "title": "flutter analyze 零 issue",
+      "status": "pass",
+      "evidence": "No issues found! (ran in 14.6s)"
+    },
+    {
+      "dimension": "可测试性",
+      "id": "flutter-test",
+      "title": "客户端单测全部通过",
+      "status": "pass",
+      "evidence": "+67: All tests passed!"
+    },
+    {
+      "dimension": "可测试性",
+      "id": "server-test",
+      "title": "网关单测（含端到端）全部通过",
+      "status": "pass",
+      "evidence": "pass=28 fail=0"
+    },
+    {
+      "dimension": "可测试性",
+      "id": "ci-catalog-guard",
+      "title": "CI 已纳入 catalog 同步守卫",
+      "status": "pass",
+      "evidence": "ci.yml 显式包含 envelope_catalog_test"
+    },
+    {
+      "dimension": "性能与可扩展性",
+      "id": "metrics-table",
+      "title": "性能指标有实测表（不再写「实现期采数」）",
+      "status": "pass",
+      "evidence": "metrics.md 含 4/4 项指标"
+    },
+    {
+      "dimension": "性能与可扩展性",
+      "id": "no-placeholder-thresholds",
+      "title": "设计文档中不再以「实现期采数」代替门限",
+      "status": "pass",
+      "evidence": "docs/design 与 docs/api 中「实现期采数」出现 0 次"
+    },
+    {
+      "dimension": "性能与可扩展性",
+      "id": "load-test",
+      "title": "并发/延迟压测可复现且有数值结论",
+      "status": "pass",
+      "evidence": "压测脚本：true；规模结论文档：true"
+    },
+    {
+      "dimension": "性能与可扩展性",
+      "id": "storage-abstraction",
+      "title": "存储可替换（会话/账号不再是唯一 JSON 实现）",
+      "status": "pass",
+      "evidence": "存在可替换存储适配层"
+    },
+    {
+      "dimension": "安全与隐私",
+      "id": "data-out-of-vcs",
+      "title": "运行期数据不在版本库",
+      "status": "pass",
+      "evidence": "仅跟踪静态配置（websocket-server/data/README.md, websocket-server/data/plans.json）"
+    },
+    {
+      "dimension": "安全与隐私",
+      "id": "devices-scoped",
+      "title": "GET /devices 按账号过滤",
+      "status": "pass",
+      "evidence": "routes 传 userId；store 按 accountKey 过滤"
+    },
+    {
+      "dimension": "安全与隐私",
+      "id": "jwt-prod-guard",
+      "title": "生产态默认 JWT 密钥启动即失败",
+      "status": "pass",
+      "evidence": "见下一步 prod 校验"
+    },
+    {
+      "dimension": "安全与隐私",
+      "id": "jwt-prod-guard-strict",
+      "title": "生产态启动校验（严格）",
+      "status": "pass",
+      "evidence": "file:///D:/works/ai-sign-language-to-speech-conversion/websocket-server/src/config.js:43\r     throw new Error(\r"
+    },
+    {
+      "dimension": "工程规范与文档完备性",
+      "id": "docs-complete-and-linked",
+      "title": "设计文档完整且相对链接全部可达",
+      "status": "pass",
+      "evidence": "Markdown 33 篇；链接检查：BROKEN: none"
+    },
+    {
+      "dimension": "工程规范与文档完备性",
+      "id": "repo-hygiene",
+      "title": "版本库无无关噪声且根目录有 .gitignore",
+      "status": "pass",
+      "evidence": "版本库中 .cursor 跟踪文件：0；根 .gitignore：true；忽略 .cursor/：true"
+    },
+    {
+      "dimension": "工程规范与文档完备性",
+      "id": "root-readme",
+      "title": "根 README 就位且描述实现现状",
+      "status": "pass",
+      "evidence": "README 含实现现状段"
+    },
+    {
+      "dimension": "风险与开放问题",
+      "id": "acceptance-closed",
+      "title": "生命周期验收口径逐条给出实现/验证状态",
+      "status": "pass",
+      "evidence": "验收表：true；含实测状态标注：true"
+    },
+    {
+      "dimension": "风险与开放问题",
+      "id": "device-acceptance",
+      "title": "设备级验收步骤可交接且未验证项明确标注",
+      "status": "pass",
+      "evidence": "device-acceptance.md 含真机步骤与未验证标注"
+    },
+    {
+      "dimension": "风险与开放问题",
+      "id": "ios-verification",
+      "title": "iOS 构建/编译状态已标明（含本机阻塞说明）",
+      "status": "pass",
+      "evidence": "iOS 段含平台与阻塞说明"
+    },
+    {
+      "dimension": "可测试性",
+      "id": "apk-build",
+      "title": "Android 调试包可构建",
+      "status": "pass",
+      "evidence": "Built build\\app\\outputs\\flutter-apk\\app-debug.apk"
+    }
+  ]
+}

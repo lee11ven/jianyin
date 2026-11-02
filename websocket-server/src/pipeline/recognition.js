@@ -10,7 +10,7 @@
 import { config } from '../config.js';
 import { gesturesCatalog } from '../data/gestures.js';
 import { extractSegmentFeatures } from './features.js';
-import { DEFAULT_SCORE_THRESHOLD, rankCandidates } from './lexicon.js';
+import { DEFAULT_SCORE_THRESHOLD, getRanker } from './lexicon.js';
 
 function supportsMotion(frame) {
   return Boolean(frame && frame.path && typeof frame.path === 'object' && frame.path.gap !== true);
@@ -58,8 +58,10 @@ export class RecognitionPipeline {
       gapMs: config.recognitionGapMs,
       threshold: config.recognitionScoreThreshold ?? DEFAULT_SCORE_THRESHOLD,
       suppressMs: config.recognitionRepeatSuppressMs,
+      backend: config.recognitionBackend,
       ...(options ?? {}),
     };
+    this.ranker = getRanker(this.options.backend);
     /** @type {Map<string, {frames: object[], utteranceSeq: number, lastEmitted: {glossId: string, ts: number} | null}>} */
     this.sessions = new Map();
   }
@@ -135,7 +137,7 @@ export class RecognitionPipeline {
     }
 
     const features = extractSegmentFeatures(frames);
-    const ranked = rankCandidates(features);
+    const ranked = this.ranker(features);
     const best = ranked[0];
 
     if (!best || best.score < this.options.threshold) {

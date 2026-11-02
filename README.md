@@ -10,8 +10,12 @@
 |------|------|
 | `jianyin_app/` | Flutter 客户端（规划名 `apps/mobile/`）：MediaPipe 端侧抽点、WS 上行、流式播音 |
 | `websocket-server/` | Node 网关（规划名 `services/api/`）：Express REST + `ws` 网关 + 识别 / TTS 管线 |
+| `services/inference/`、`services/tts/` | 识别与 TTS 服务的规划位置（当前在网关进程内以 `src/pipeline/` 承载） |
+| `edge/agent`、`edge/simulator`、`edge/wearable` | 边缘 / 模拟器 / 穿戴的规划位置（二期） |
 | `docs/api/` | 冻结协议（`protocolVersion: 1`，唯一字段事实来源） |
 | `docs/design/` | 设计文档体系：系统架构、客户端 APP、客户端算法、云端算法 |
+| `docs/reports/` | 实测与评级证据：性能指标、容量压测、设备验收、自动评级 |
+| `tools/` | 自动评级（`grade.mjs`）与文档链接检查 |
 | `.github/workflows/ci.yml` | CI：客户端 analyze + test；网关 test + 启动冒烟 |
 
 规划目录与实际位置的映射见 `docs/design/系统架构/modules.md`。
@@ -28,7 +32,7 @@ npm start         # 默认监听 0.0.0.0:8000
 curl http://127.0.0.1:8000/health
 ```
 
-环境变量见 `.env.example`：`HOST` / `PORT` / `NODE_ENV` / `JWT_SECRET`（**production 必须改为强随机值，否则启动即失败**）/ `TTS_BACKEND`。
+环境变量见 `.env.example`：`HOST` / `PORT` / `NODE_ENV` / `JWT_SECRET`（**production 必须改为强随机值，否则启动即失败**）/ `TTS_BACKEND` / `RECOGNITION_BACKEND`（默认 `rules`，可选 `model`）。
 
 ### 客户端
 
@@ -40,7 +44,7 @@ flutter test      # 单元测试
 flutter run       # 设备 / 模拟器
 ```
 
-客户端的接口地址在 `lib/config/api_config.dart`，**必须与网关地址一致**后才能联调。
+客户端的接口地址在 `lib/config/api_config.dart`，**默认端口已与网关对齐（`8000`）**；默认主机为局域网示例 `192.168.1.100`，联调时用 `--dart-define=API_BASE_URL=http://<host>:8000` 覆盖。
 
 ## 实现现状（与设计文档对照）
 

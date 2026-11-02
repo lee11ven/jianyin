@@ -60,4 +60,12 @@ void main() {
     });
     expect(session.sessionId, 'sess-x');
   });
+
+  test('default gateway address aligns with gateway port 8000', () {
+    final base = Uri.parse(ApiConfig.baseUrl);
+    // 回归守卫：与 websocket-server/src/config.js 的默认端口保持一致，且不得硬编码公网 IP。
+    expect(base.port, 8000);
+    expect(base.host, isNot('186.241.105.178'));
+    expect(ApiConfig.baseUrl.contains('186.241.105.178'), isFalse);
+  });
 }

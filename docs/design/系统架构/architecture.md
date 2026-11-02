@@ -45,7 +45,7 @@
 
 **不部署视频媒体服务器**；云端不接收、不解码会话主路径视频。
 
-**实现现状（2026-11）**：API 组件已落地（`websocket-server/`）；**Recognition 与 Streaming TTS 仍为占位**（`src/pipeline/recognition.js`、`src/pipeline/tts.js`），暂无 `recognition` 与音频产出。最小可用落地见 [算法/云端/滑动窗口识别.md](../算法/云端/滑动窗口识别.md)「一期最小可用实现」与本文「流式 TTS 落地（最小可用）」。
+**实现现状（2026-11）**：API 组件已落地（`websocket-server/`）；**Recognition 与 Streaming TTS 已落地一期最小可用实现**（`src/pipeline/{features,lexicon,recognition}.js` 与 `tts.js`、`tts_queue.js`），可产出 `recognition` 与 PCM 音频流（端到端有自动化门）。当前为**演示级后端**（规则词表 + 离线确定性波形），接口可替换为生产模型 / 真实合成器。最小可用落地见 [算法/云端/滑动窗口识别.md](../算法/云端/滑动窗口识别.md)「一期最小可用实现」与本文「流式 TTS 落地（最小可用）」。
 
 ## 端到端数据流
 

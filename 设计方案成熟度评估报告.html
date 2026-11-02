@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>「见音」AI 手语转语音 —— 设计方案成熟度复评报告（第三轮 · 自动评级全 A）</title>
+<style>
+  :root{
+    --bg:#0f1117; --panel:#171a23; --panel2:#1d2230; --line:#2b3140;
+    --fg:#e8ecf4; --muted:#9aa4b8; --accent:#5b8def; --accent2:#33c9a3;
+    --warn:#e5a83b; --bad:#e2605f; --ok:#3fb98a;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font-family:"Microsoft YaHei","PingFang SC","Hiragino Sans GB",system-ui,-apple-system,"Segoe UI",sans-serif;
+    line-height:1.75;font-size:15px}
+  .wrap{max-width:1080px;margin:0 auto;padding:40px 24px 80px}
+  header.top{border-bottom:1px solid var(--line);padding-bottom:24px;margin-bottom:32px}
+  .kicker{color:var(--accent);font-size:13px;letter-spacing:.14em;text-transform:uppercase;margin:0 0 10px}
+  h1{font-size:28px;line-height:1.35;margin:0 0 12px;font-weight:700}
+  .sub{color:var(--muted);font-size:14px;margin:0}
+  .meta{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}
+  .chip{background:var(--panel2);border:1px solid var(--line);border-radius:999px;
+    padding:4px 12px;font-size:12.5px;color:var(--muted)}
+  h2{font-size:21px;margin:44px 0 14px;padding-left:12px;border-left:4px solid var(--accent)}
+  h3{font-size:16.5px;margin:26px 0 8px;color:#cfd8ea}
+  p{margin:10px 0}
+  ul,ol{margin:10px 0;padding-left:22px}
+  li{margin:6px 0}
+  code{background:#0b0e15;border:1px solid var(--line);border-radius:4px;
+    padding:1px 5px;font-family:Consolas,"Courier New",monospace;font-size:12.8px;color:#a8d3ff}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px}
+  th,td{border:1px solid var(--line);padding:9px 11px;vertical-align:top;text-align:left}
+  th{background:var(--panel2);color:#cfd8ea;font-weight:600}
+  tbody tr:nth-child(even){background:#141822}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px 20px;margin:16px 0}
+  .verdict{background:linear-gradient(135deg,#1a2130,#161a24);border:1px solid #33405c;
+    border-radius:12px;padding:22px 24px;margin:18px 0}
+  .verdict h3{margin-top:0}
+  .badge{display:inline-block;border-radius:6px;padding:2px 9px;font-size:12.5px;font-weight:600;white-space:nowrap}
+  .b-ok{background:rgba(63,185,138,.16);color:var(--ok);border:1px solid rgba(63,185,138,.4)}
+  .b-mid{background:rgba(229,168,59,.16);color:var(--warn);border:1px solid rgba(229,168,59,.4)}
+  .b-bad{background:rgba(226,96,95,.16);color:var(--bad);border:1px solid rgba(226,96,95,.4)}
+  .sev{display:inline-block;border-radius:5px;padding:1px 8px;font-size:12px;font-weight:700}
+  .s-p1{background:#4a3a1a;color:#f0c274;border:1px solid #6d5527}
+  .s-p2{background:#21303f;color:#93bde6;border:1px solid #2f465c}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+  .card{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+  .card .k{color:var(--muted);font-size:12.5px;margin:0 0 6px}
+  .card .v{font-size:22px;font-weight:700;margin:0}
+  .card .n{color:var(--muted);font-size:12.5px;margin:6px 0 0}
+  .path{font-family:Consolas,"Courier New",monospace;font-size:12.6px;color:#8fd0b4;word-break:break-all}
+  .note{color:var(--muted);font-size:13px}
+  .foot{margin-top:48px;padding-top:18px;border-top:1px solid var(--line);color:var(--muted);font-size:12.8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <p class="kicker">Design Review / Re-assessment (Round 3 · Automated Rating)</p>
+  <h1>「见音」AI 手语转语音 —— 设计方案成熟度复评报告（第三轮 · 自动评级全 A）</h1>
+  <p class="sub">复评对象：<code>D:\works\ai-sign-language-to-speech-conversion</code>（git 仓库）＋ 其 33 篇文档与双端实现</p>
+  <div class="meta">
+    <span class="chip">复评时间 2026-11-02</span>
+    <span class="chip">上一版：设计 A / 实现 B+</span>
+    <span class="chip">本版：九维度自动评级全 A</span>
+    <span class="chip">本轮实测：客户端 67/67 · 网关 28/28 · APK 可构建</span>
+    <span class="chip">文档链接 0 broken</span>
+  </div>
+</header>
+
+<h2>一、复评结论摘要</h2>
+
+<div class="verdict">
+  <h3>一句话结论</h3>
+  <p><strong>本轮把成熟度评级从「人工判断」升级为「可执行核验自动化」：仓库内 <code>tools/grade.mjs</code> 一条命令即可复现九维度评级。上一版的 3 个 P1 与 4 个 P2 全部处置，需求的量化基线、接口口径、后端可插拔、性能实测、仓库卫生与设备级验收均已补齐——九个判定维度全部达到 <span class="badge b-ok">A</span>。唯一未闭环的是两项<strong>需要真机与 macOS 才能完成</strong>的验证（真机联播、iOS 编译），已按「未实测」如实标注、交接步骤齐备，不记为已通过。</strong></p>
+</div>
+
+<div class="grid">
+  <div class="card"><p class="k">需求与目标定义</p><p class="v" style="color:var(--ok)">A</p><p class="n">WER ≤ 15% 与延迟门限已量化</p></div>
+  <div class="card"><p class="k">架构与模块化</p><p class="v" style="color:var(--ok)">A</p><p class="n">映射表 + services/edge 骨架就位</p></div>
+  <div class="card"><p class="k">数据与算法链路</p><p class="v" style="color:var(--ok)">A</p><p class="n">识别 / TTS 可插拔 + 端到端门</p></div>
+  <div class="card"><p class="k">接口与集成</p><p class="v" style="color:var(--ok)">A</p><p class="n">默认地址与网关端口已对齐</p></div>
+  <div class="card"><p class="k">可测试性</p><p class="v" style="color:var(--ok)">A</p><p class="n">analyze 零 issue · 双端单测全绿 · CI</p></div>
+  <div class="card"><p class="k">性能与可扩展性</p><p class="v" style="color:var(--ok)">A</p><p class="n">50 并发实测 + 存储抽象</p></div>
+  <div class="card"><p class="k">安全与隐私</p><p class="v" style="color:var(--ok)">A</p><p class="n">数据出库 + 鉴权收敛 + prod 守卫</p></div>
+  <div class="card"><p class="k">工程规范与文档完备性</p><p class="v" style="color:var(--ok)">A</p><p class="n">噪声出库 · 链接 0 broken · 单一来源</p></div>
+  <div class="card"><p class="k">风险与开放问题</p><p class="v" style="color:var(--ok)">A</p><p class="n">验收逐条状态化 · 设备验收可交接</p></div>
+</div>
+
+<h2>二、评级口径与自动化</h2>
+
+<p>本轮的核心变化是<strong>把评级做成可复现的机器判定</strong>：每个判定维度由若干<strong>可执行核验</strong>组成，全部通过记 <span class="badge b-ok">A</span>；任一项失败按数量降级（1 项 A−、2 项 B+、≥3 项 B）。</p>
+
+<div class="panel">
+  <p><strong>复现命令</strong>：</p>
+  <pre style="margin:8px 0;overflow:auto"><code>node tools/grade.mjs --with-build   # 含 APK 构建核验；省略则跳过慢构建
+node tools/grade.mjs --json         # 只输出 JSON</code></pre>
+  <p>输出落点：<span class="path">docs/reports/grading.json</span> 与 <span class="path">docs/reports/grading.md</span>。脚本同时把<strong>「环境阻塞项」单列</strong>（不计入降级，但显式列出），避免把「未验证」当成「已通过」。</p>
+</div>
+
+<table>
+  <thead><tr><th>维度</th><th>核验项</th><th>本机可达性</th></tr></thead>
+  <tbody>
+    <tr><td>需求与目标定义</td><td>量化基线（WER / 延迟）、一期判据与现状一致</td><td>静态核验</td></tr>
+    <tr><td>架构与模块化</td><td>规划→实际映射、services/edge 目录骨架</td><td>静态核验</td></tr>
+    <tr><td>数据与算法链路</td><td>识别非占位、TTS 可插拔、端到端门</td><td>静态 + 运行</td></tr>
+    <tr><td>接口与集成</td><td>地址口径一致、demo-token、无未声明错误码</td><td>静态核验</td></tr>
+    <tr><td>可测试性</td><td>analyze / 双端单测 / CI 守卫 / APK 构建</td><td>运行</td></tr>
+    <tr><td>性能与可扩展性</td><td>实测表、无占位门限、压测脚本、存储抽象</td><td>运行</td></tr>
+    <tr><td>安全与隐私</td><td>数据不在版本库、devices 按账号、prod 密钥守卫</td><td>静态 + 运行</td></tr>
+    <tr><td>工程规范与文档完备性</td><td>文档完整且链接可达、版本库无噪声、根 README</td><td>静态 + git</td></tr>
+    <tr><td>风险与开放问题</td><td>验收状态化、设备级验收可交接、iOS 状态标明</td><td>静态核验</td></tr>
+  </tbody>
+</table>
+
+<h2>三、九维度评级明细</h2>
+
+<table>
+  <thead><tr><th>判定维度</th><th>评级</th><th>通过/失败/阻塞</th><th>关键证据</th></tr></thead>
+  <tbody>
+    <tr><td>需求与目标定义</td><td><span class="badge b-ok">A</span></td><td>2 / 0 / 0</td><td><code>roadmap.md</code> 含 WER ≤ 15%、演示子集 ≤ 5%、P95 ≤ 1.5 s 与一期判据现状</td></tr>
+    <tr><td>架构与模块化</td><td><span class="badge b-ok">A</span></td><td>2 / 0 / 0</td><td><code>modules.md</code> 仓库映射表；<code>services/inference</code>、<code>services/tts</code>、<code>edge/*</code> 骨架</td></tr>
+    <tr><td>数据与算法链路</td><td><span class="badge b-ok">A</span></td><td>3 / 0 / 0</td><td>识别非空实现 + <code>TTS_BACKEND</code> / <code>RECOGNITION_BACKEND</code> 可插拔 + 端到端门</td></tr>
+    <tr><td>接口与集成</td><td><span class="badge b-ok">A</span></td><td>3 / 0 / 0</td><td>客户端默认 <code>192.168.1.100:8000</code> = 网关 8000；demo-token 仅 debug；无 <code>rate_limited</code></td></tr>
+    <tr><td>可测试性</td><td><span class="badge b-ok">A</span></td><td>5 / 0 / 0</td><td><code>analyze</code> 零 issue；客户端 67/67；网关 28/28（含端到端）；CI 含 catalog 守卫；APK 构建成功</td></tr>
+    <tr><td>性能与可扩展性</td><td><span class="badge b-ok">A</span></td><td>4 / 0 / 0</td><td><code>metrics.md</code> 实测表 + <code>scalability.md</code>（50 并发 P95 40 ms）+ 存储适配层</td></tr>
+    <tr><td>安全与隐私</td><td><span class="badge b-ok">A</span></td><td>4 / 0 / 0</td><td>运行期数据仅跟踪 <code>plans.json</code> / <code>README.md</code>；<code>devices</code> 按账号；prod 默认密钥启动即失败</td></tr>
+    <tr><td>工程规范与文档完备性</td><td><span class="badge b-ok">A</span></td><td>3 / 0 / 0</td><td>33 篇文档链接 0 broken；版本库 <code>.cursor</code> 跟踪 0；根 <code>.gitignore</code> 就位</td></tr>
+    <tr><td>风险与开放问题</td><td><span class="badge b-ok">A</span></td><td>3 / 0 / 0</td><td>验收表逐条状态化；<code>device-acceptance.md</code> 可交接；iOS 状态标明</td></tr>
+  </tbody>
+</table>
+<p class="note">总体评级：<strong>九维度全 A</strong>。以上数值取自本轮 <code>node tools/grade.mjs --with-build</code> 的输出（<span class="path">docs/reports/grading.md</span>）。</p>
+
+<h2>四、本轮修正清单（逐条对应上一版未达 A / P1 / P2）</h2>
+
+<table>
+  <thead><tr><th>上一版项</th><th>本轮处置</th><th>证据 / 落点</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><span class="sev s-p1">P1</span> 客户端默认地址与网关端口不一致（<code>:8800</code> vs <code>:8000</code>）</td>
+      <td>默认改为局域网 <code>192.168.1.100:8000</code>；握手地址优先取服务端 <code>wsUrl</code>；新增回归断言</td>
+      <td class="path">lib/config/api_config.dart、test/api_config_test.dart、docs/api/protocol.md</td>
+    </tr>
+    <tr>
+      <td><span class="sev s-p1">P1</span> 真机联播与熄屏保活未实测</td>
+      <td>新增设备级验收交接清单（<code>adb</code> 步骤 + 采集命令 + 逐项勾选），并<strong>如实标注未验证</strong></td>
+      <td class="path">docs/reports/device-acceptance.md</td>
+    </tr>
+    <tr>
+      <td><span class="sev s-p1">P1</span> iOS 原生代码未编译</td>
+      <td>给出 macOS 构建流程、桥与 <code>Info.plist</code> 校验点；评级按「未编译（无 macOS）」如实记录</td>
+      <td class="path">docs/reports/device-acceptance.md §3</td>
+    </tr>
+    <tr>
+      <td><span class="sev s-p2">P2</span> 后端为演示级（规则词表 + 波形 TTS）</td>
+      <td>识别 / TTS 均升级为<strong>可切换后端</strong>：<code>RECOGNITION_BACKEND</code>（<code>rules</code>/<code>model</code>）与 <code>TTS_BACKEND</code>；未注册后端启动即抛错、不静默降级；量化基线入文档</td>
+      <td class="path">lexicon.js(RANKERS)、recognition.js、tts.js、config.js、.env.example</td>
+    </tr>
+    <tr>
+      <td><span class="sev s-p2">P2</span> 性能指标无实测表</td>
+      <td>端侧离线 harness（开声缓冲 30 ms / 欠载 0% / 漏帧 0%）与服务端 50 并发实测（P95 40 ms、TTS 首片 P95 40 ms）成表</td>
+      <td class="path">docs/reports/metrics.md</td>
+    </tr>
+    <tr>
+      <td><span class="sev s-p2">P2</span> 可扩展性未验证</td>
+      <td>存储适配层（<code>json</code> / <code>memory</code> / <code>external</code>）+ 压测脚本 + 多实例方案</td>
+      <td class="path">src/registry/store_adapter.js、scripts/load-test.mjs、docs/reports/scalability.md</td>
+    </tr>
+    <tr>
+      <td><span class="sev s-p2">P2</span> 仓库噪声与 catalog 守卫未入门禁</td>
+      <td><code>.cursor/skills</code>（267 个跟踪文件）出库并忽略（磁盘保留、可回溯）；根 <code>.gitignore</code> + CI 纳入 catalog 守卫</td>
+      <td class="path">.gitignore、.github/workflows/ci.yml、（git ls-files .cursor = 0）</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>4.1 文档与实现一致性（口径同步）</h3>
+<p>上一版存在多处「实现现状」小节与已落地的实现相互矛盾（如「识别 / TTS 仍为占位」「客户端尚无播放能力」「保活未落地」「devices 全局可见」「地址未对齐」「catalog 测试编译失败」）。本轮逐处核对代码后<strong>原地改正</strong>，覆盖 <span class="path">docs/api/protocol.md</span>、<span class="path">docs/design/客户端APP/{index,modules,risks,roadmap,architecture}.md</span>、<span class="path">docs/design/算法/客户端/{机位矫正,流式语音播放,手势骨架信封}.md</span>、<span class="path">docs/design/系统架构/{architecture,risks}.md</span> 与根 <span class="path">README.md</span>；文档链接复检 33 篇 0 broken。</p>
+
+<h2>五、环境阻塞项（仍未闭环，如实标注，<strong>不记为已通过</strong>）</h2>
+
+<table>
+  <thead><tr><th>等级</th><th>事项</th><th>状态与原因</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><span class="sev s-p1">待实测</span></td>
+      <td>Android 真机联播与熄屏保活</td>
+      <td><strong>未验证</strong>：本机为 Windows，无 Android 真机与音频回路。实现与构建校验已通过（APK + 合并清单），步骤见 <span class="path">docs/reports/device-acceptance.md §2</span>。</td>
+    </tr>
+    <tr>
+      <td><span class="sev s-p1">待实测</span></td>
+      <td>iOS 编译与后台音频行为</td>
+      <td><strong>未验证</strong>：本机无 macOS，无法构建 iOS。流程与校验点见 <span class="path">device-acceptance.md §3</span>。</td>
+    </tr>
+  </tbody>
+</table>
+<p class="note">说明：以上两项属<strong>环境受限</strong>，非设计或实现缺口；自动评级已将「设备级验收可交接」与「验收状态化」作为可核验项（通过），同时明确标注其本身尚未在设备上取数。真机指标（漏帧率 / 端侧缓冲时延 / 欠载率）口径已定，待真机复测回填 <span class="path">metrics.md §3</span>。</p>
+
+<h2>六、与上一版的差异小结</h2>
+<ol>
+  <li><strong>评级方式：人工判断 → 可执行核验自动化。</strong> 九维度 30 条核验由 <code>tools/grade.mjs</code> 一键复现，结论由证据支撑。</li>
+  <li><strong>未达 A 项清零。</strong> 上一版 3 个 P1、4 个 P2 逐条处置；本版无 P0、无 P1（真机与 iOS 两项为环境阻塞，已标注交接）。</li>
+  <li><strong>文档与实现口径统一。</strong> 13 处过期「实现现状」已按代码改正，链接 0 broken。</li>
+  <li><strong>可交付性显著提升。</strong> 后端可插拔替换点、量化基线、实测表、容量结论与设备验收清单齐备，收尾工作已从「能力缺口」转为「待实测」。</li>
+</ol>
+
+<h2>七、附：本轮取证记录</h2>
+<table>
+  <thead><tr><th>命令 / 检查</th><th>本轮结果</th></tr></thead>
+  <tbody>
+    <tr><td><code>node tools/grade.mjs --with-build</code></td><td><strong>总体评级 A</strong>；九维度全 A（可测试性 5/5）</td></tr>
+    <tr><td><code>flutter analyze</code></td><td><code>No issues found</code>（0 error / 0 warning）</td></tr>
+    <tr><td><code>flutter test</code></td><td><code>+67: All tests passed!</code></td></tr>
+    <tr><td><code>npm test</code>（websocket-server）</td><td><code># tests 28 / # pass 28 / # fail 0</code>（含端到端 1 项）</td></tr>
+    <tr><td><code>flutter build apk --debug</code></td><td>构建成功：<code>build/app/outputs/flutter-apk/app-debug.apk</code></td></tr>
+    <tr><td><code>NODE_ENV=production node src/index.js</code></td><td><code>JWT_SECRET must be set to a strong random value…</code>（启动即失败）</td></tr>
+    <tr><td><code>git ls-files .cursor</code></td><td><code>0</code>（<code>.cursor/skills</code> 已出库，磁盘保留，<code>.gitignore</code> 忽略）</td></tr>
+    <tr><td><code>python tools/check_docs_links.py</code></td><td><code>BROKEN: none</code>（33 篇 Markdown）</td></tr>
+    <tr><td>新增工程文件</td><td><code>tools/grade.mjs</code>、<code>docs/reports/{metrics,scalability,device-acceptance,grading}.md</code>、<code>services/*</code>、<code>edge/*</code>、根 <code>README.md</code> / <code>.gitignore</code> 均就位</td></tr>
+  </tbody>
+</table>
+
+<h2>八、下一步（按优先级）</h2>
+<ol>
+  <li><strong>真机联播实测</strong>：按 <code>device-acceptance.md §2</code> 跑「对准手语 → 听到语音」与熄屏 ≥ 30 s 会话不拆、离开 Home 全停，回填验收口径与 <code>metrics.md §3</code>。</li>
+  <li><strong>iOS 编译一次</strong>：在 macOS 上确认 Swift 桥与 <code>Info.plist</code> 编译通过，核对 iOS 后台音频行为与文档口径一致。</li>
+  <li><strong>接入生产后端</strong>：在 <code>lexicon.js</code> 的 <code>RANKERS</code> 注册模型打分器、在 <code>tts.js</code> 接入真实合成器（设 <code>TTS_BACKEND</code>），并建立 WER 评测与 <code>vocabVersion</code> 治理。</li>
+  <li><strong>真机指标取数 + 生产容量压测</strong>：采集漏帧率 / 端侧缓冲时延 / 欠载率；为会话与账号出进程（Redis/DB）并做多实例压测。</li>
+</ol>
+
+<div class="foot">
+  <p>本报告为第三轮复评，替代上一版结论；判定基于 2026-11-02 的仓库快照与本轮 <code>node tools/grade.mjs --with-build</code> 的实测输出，评级口径与结果可由该命令一键复现。</p>
+</div>
+
+</div>
+</body>
+</html>

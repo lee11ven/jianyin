@@ -146,6 +146,16 @@ test('会话隔离与 reset', () => {
   assert.equal(results[0].sessionId, 'sess-99999999');
 });
 
+test('后端可插拔：默认 rules 可用，未注册后端明确报错', () => {
+  const { onResult } = collect();
+  const pipeline = new RecognitionPipeline({ onResult });
+  assert.equal(typeof pipeline.ranker, 'function');
+  assert.throws(
+    () => new RecognitionPipeline({ onResult, options: { backend: 'model' } }),
+    /不可用/,
+  );
+});
+
 test('ingest 参数防御：缺 sessionId / 非对象直接忽略', () => {
   const pipeline = new RecognitionPipeline({ onResult: () => {} });
   assert.deepEqual(pipeline.ingest(null, landmarks(0, 0.5)), []);

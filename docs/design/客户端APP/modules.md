@@ -20,13 +20,13 @@ jianyin_app/lib/
   ws/              # WebSocket 连接与帧路由                [已落地]
   perception/      # 同拍调度 body → path → hands → pack   [已落地]
   native/          # MediaPipe 双端桥（Pose / Hands）       [已落地]
-  tts/             # 流式播音管线（规划位置）                [未落地]
+  tts/             # 流式播音管线（Recv/Asm/JitterBuffer/Player） [已落地]
   session/         # REST 建停；不重连                      [已落地]
   features/        # 页面与交互（规划名 ui/）                [已落地]
   widgets/         # 复用组件                              [已落地]
   theme/           # 设计 token                            [已落地]
   router/          # 路由                                  [已落地]
-  config/          # 阈值与接口配置；冷启动加载             [已落地；机位阀门未接入]
+  config/          # 阈值与接口配置；冷启动加载             [已落地]
 ```
 
 ## 同拍调度
@@ -132,7 +132,7 @@ jianyin_app/lib/
 
 ## tts/ -- 流式播音管线
 
-**落地**：规划位置 `jianyin_app/lib/tts/`，**当前尚未创建**，本节全部职责（Recv / UtteranceAssembler / JitterBuffer / Player）**均未实现**。`ws/` 已具备 `audio.header` + Binary 的接收与分派（见 [ws/](#ws---websocket-连接管理)），待本模块接管；当前「播报中」状态由 `lib/session/home_session_controller.dart` 以占位逻辑维护。
+**落地**：`jianyin_app/lib/tts/`（`recv.dart` / `utterance_assembler.dart` / `jitter_buffer.dart` / `pcm_player.dart` / `tts_pipeline.dart`）+ 双端原生桥（Android `AudioTrack` / iOS `AVAudioEngine`）。本节职责（Recv / UtteranceAssembler / JitterBuffer / Player）均已实现；`ws/` 把 `audio.header` + Binary 分派交本模块（见 [ws/](#ws---websocket-连接管理)），「播报中」状态由 `tts_pipeline.dart` 驱动。真机出声待实测。
 
 **职责**：
 - Recv：校验 speech 与 audio.header 的格式和会话。只接受 `delivery = ws_binary_audio`，且为 PCM s16le / 16 kHz / mono。

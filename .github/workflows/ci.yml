@@ -21,6 +21,8 @@ jobs:
         run: flutter analyze
       - name: 单元测试
         run: flutter test
+      - name: catalog 同步守卫（文档与 catalog.dart 一致性）
+        run: flutter test test/envelope_catalog_test.dart
 
   server:
     name: Node 网关（test + 启动冒烟）

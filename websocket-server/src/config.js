@@ -15,6 +15,9 @@ recognitionWindowMs: 1000, // 环形缓冲覆盖的最近窗口（起点 0.6–1
   recognitionGapMs: 200, // T_gap：连续 gap 超过该值必须切开，禁止假连接
   recognitionScoreThreshold: 0.6, // 出词阈值（宁缺勿错）
   recognitionRepeatSuppressMs: 2000, // 同词节流窗口
+  // 识别后端：'rules' = 离线规则词表（演示/开发用，不依赖外部服务与凭据）；
+  // 'model' = 生产时序模型接入点（需在 lexicon.js 的 RANKERS 注册）。未注册后端启动即抛错，不静默降级。
+  recognitionBackend: process.env.RECOGNITION_BACKEND || 'rules',
   ttsSampleRate: 16_000,
   ttsChannels: 1,
   ttsChunkSamples: 1600, // 100ms @ 16kHz

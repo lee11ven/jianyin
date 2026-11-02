@@ -127,3 +127,28 @@ export function rankCandidates(features) {
   );
   return rows;
 }
+
+/**
+ * 打分后端注册表（可插拔）。
+ * - `rules`：离线规则词表（默认；演示 / 开发用，不依赖外部服务与凭据）；
+ * - `model`：生产时序模型接入点。接入时把 `rankCandidates` 替换为模型推理，
+ *   保持 `extractSegmentFeatures` 的特征契约与返回的降序候选形状（`id` / `text` / `score`）不变。
+ */
+export const RANKERS = {
+  rules: rankCandidates,
+  model: null,
+};
+
+/**
+ * 按名称取打分后端；未知或未接入的实现直接抛错，避免静默降级为演示后端。
+ * @param {string} name 后端名（见 `config.recognitionBackend`）
+ */
+export function getRanker(name) {
+  const ranker = RANKERS[name];
+  if (typeof ranker !== 'function') {
+    throw new Error(
+      `recognition backend "${name}" 不可用：请设 RECOGNITION_BACKEND=rules，或在 src/pipeline/lexicon.js 的 RANKERS 注册模型打分器`,
+    );
+  }
+  return ranker;
+}

@@ -1,0 +1,31 @@
+# 仓库通用忽略规则
+
+## 构建与依赖产物
+jianyin_app/build/
+jianyin_app/.dart_tool/
+jianyin_app/android/.gradle/
+jianyin_app/android/.kotlin/
+jianyin_app/ios/Pods/
+jianyin_app/**/Flutter.framework
+node_modules/
+websocket-server/node_modules/
+websocket-server/dist/
+websocket-server/.env
+*.log
+.DS_Store
+
+## 运行期数据（含手机号与密码哈希）：只留部署机
+websocket-server/data/users.json
+websocket-server/data/membership.json
+websocket-server/data/history.json
+
+## 评审输入与工具临时目录
+.dumate/
+tmp/
+.tmp/
+
+## 交付压缩包（可由源码再生成，不入版本库）
+*.zip
+
+## 编辑器 / 工具链本地目录（不作为项目产物）
+.cursor/

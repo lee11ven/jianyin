@@ -29,7 +29,7 @@ WS 文本帧公共字段：
 
 ## REST
 
-Base URL：`http://<host>:<port>`。服务端默认监听 `0.0.0.0:8000`（可用 `HOST` / `PORT` 覆盖，见 `websocket-server/.env.example`）；客户端的默认地址与端口定义在 `jianyin_app/lib/config/api_config.dart`。**联调前两侧必须一致**，当前默认值不同，属未对齐项（见文末「实现现状」）。
+Base URL：`http://<host>:<port>`。服务端默认监听 `0.0.0.0:8000`（可用 `HOST` / `PORT` 覆盖，见 `websocket-server/.env.example`）；客户端默认地址与端口定义在 `jianyin_app/lib/config/api_config.dart`，**默认端口已与网关对齐为 `8000`**（默认主机为局域网示例 `192.168.1.100`，可用 `--dart-define=API_BASE_URL=http://<host>:8000` 覆盖）。建会话后握手地址优先取 REST 返回的 `wsUrl`（服务端按请求 `Host` 生成），故只要 REST 地址正确，WS 地址自动跟随，无需二次配置。
 
 | Method | Path | 鉴权 | 说明 |
 |--------|------|------|------|
@@ -275,7 +275,7 @@ Query 可选：`from`、`to`（`YYYY-MM-DD`，含端点）。
 }
 ```
 
-- 当前返回服务端**全局**设备视图，未按账号过滤（待收紧，见文末「实现现状」）。
+- 仅返回**当前 JWT `userId` 所属账号**的设备（`listDevices(userId)`）；不再返回全局设备视图，并有单测断言「不传账号不返回全局视图」。
 
 ### POST `/api/v1/sessions`
 
@@ -541,8 +541,8 @@ Query 可选：`from`、`to`（`YYYY-MM-DD`，含端点）。
 |------|------|
 | REST：auth / me / history / membership / devices / gestures / sessions | 已实现（`websocket-server/src/rest/routes.js`） |
 | WS：握手鉴权、心跳、会话互斥、空闲回收 | 已实现（`websocket-server/src/ws/gateway.js`、`heartbeat.js`） |
-| 上行 `landmarks`（`csl_channels_v1`） | 已实现（`jianyin_app/lib/ws/app_ws_client.dart`）；默认接口地址需与服务端对齐 |
-| 下行 `recognition` | **未实现**：识别管线为空实现，暂无产出（`websocket-server/src/pipeline/recognition.js`） |
-| 下行 `speech` + 二进制音频帧 | **未实现**：TTS 返回空 `chunks`（`websocket-server/src/pipeline/tts.js`） |
-| 客户端播放（抖动缓冲、按句串行） | **未实现**：客户端尚无音频播放能力，`audio.header` 与二进制帧仅被接收 |
-| `GET /api/v1/devices` | 返回服务端全局设备视图，**未按账号过滤**（待收紧） |
+| 上行 `landmarks`（`csl_channels_v1`） | 已实现（`jianyin_app/lib/ws/app_ws_client.dart`）；客户端默认端口已与网关对齐（`8000`） |
+| 下行 `recognition` | 已实现（`websocket-server/src/pipeline/{features,lexicon,recognition}.js`）：切段 + 特征 + 规则词表打分，端到端有自动化门 |
+| 下行 `speech` + 二进制音频帧 | 已实现（`src/pipeline/tts.js`、`tts_queue.js`）：PCM s16le / 16 kHz / mono 分片，`audio.header` + Binary 成对、按句串行、背压丢中间片 |
+| 客户端播放（抖动缓冲、按句串行） | 已实现（`jianyin_app/lib/tts/`：Recv / Assembler / JitterBuffer / Player + 双端原生桥） |
+| `GET /api/v1/devices` | 已按账号过滤（`listDevices(userId)`）并加单测 |
