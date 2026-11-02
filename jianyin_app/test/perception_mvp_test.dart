@@ -101,7 +101,8 @@ void main() {
       handStatePrior: HandState.left,
       omitHands: false,
     );
-    expect(withHands.hands, isNotNull);
+    expect(withHands, isNotNull);
+    expect(withHands!.hands, isNotNull);
     expect(withHands.path?.gap, isFalse);
 
     final omitted = await pipeline.tick(
@@ -111,7 +112,8 @@ void main() {
       handStatePrior: HandState.left,
       omitHands: true,
     );
-    expect(omitted.hands, isNull);
+    expect(omitted, isNotNull);
+    expect(omitted!.hands, isNull);
     expect(omitted.path?.gap, isFalse);
 
     await pipeline.dispose();

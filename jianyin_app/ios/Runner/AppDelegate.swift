@@ -1,3 +1,4 @@
+import AVFoundation
 import Flutter
 import UIKit
 import MediaPipeTasksVision
@@ -5,6 +6,7 @@ import MediaPipeTasksVision
 @main
 @objc class AppDelegate: FlutterAppDelegate {
   private var visionPlugin: MediaPipeVisionPlugin?
+  private var pcmPlayerPlugin: PcmPlayerPlugin?
 
   override func application(
     _ application: UIApplication,
@@ -19,8 +21,19 @@ import MediaPipeTasksVision
         name: MediaPipeVisionPlugin.channelName,
         binaryMessenger: controller.binaryMessenger
       )
-      channel.setMethodCallHandler { call, result in
+channel.setMethodCallHandler { call, result in
         plugin.handle(call, result: result)
+      }
+
+      // 流式 PCM 播放桥：与视觉桥并列注册，二者互不影响。
+      let audioPlugin = PcmPlayerPlugin()
+      pcmPlayerPlugin = audioPlugin
+      let audioChannel = FlutterMethodChannel(
+        name: PcmPlayerPlugin.channelName,
+        binaryMessenger: controller.binaryMessenger
+      )
+      audioChannel.setMethodCallHandler { call, result in
+        audioPlugin.handle(call, result: result)
       }
     }
     return ok
@@ -175,6 +188,137 @@ final class MediaPipeVisionPlugin: NSObject {
             shouldInterpolate: false,
             intent: .defaultIntent
           ) else { return nil }
-    return try? MPImage(uiImage: UIImage(cgImage: cgImage))
+return try? MPImage(uiImage: UIImage(cgImage: cgImage))
+  }
+}
+
+/// 流式 PCM 播放桥（iOS）。
+///
+/// 契约：只接受 **PCM s16le / 16 kHz / mono**（见 docs/api/protocol.md）。
+/// 实现：`AVAudioEngine` + `AVAudioPlayerNode`，Int16 buffer 逐片入队；
+/// 音频会话用 `playback` + `spokenAudio`，为「熄屏/后台续播」提供系统能力
+/// （见 docs/design/客户端APP/architecture.md 平台落点）。
+/// `bufferedFrames` 以「已排队帧数 − 播放器已推进帧数」近似原生水位，
+/// 供 Dart 侧抖动缓冲判定欠载。
+final class PcmPlayerPlugin: NSObject {
+  static let channelName = "jianyin/pcm_player"
+
+  private let engine = AVAudioEngine()
+  private let player = AVAudioPlayerNode()
+  private var format: AVAudioFormat?
+  private var started = false
+  private var scheduledFrames = 0
+
+  func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    switch call.method {
+    case "open":
+      open(call, result: result)
+    case "write":
+      write(call, result: result)
+    case "bufferedFrames":
+      result(bufferedFrames())
+    case "flush":
+      flush()
+      result(nil)
+    case "close":
+      close()
+      result(nil)
+    default:
+      result(FlutterMethodNotImplemented)
+    }
+  }
+
+  private func open(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    let args = call.arguments as? [String: Any] ?? [:]
+    let sampleRate = (args["sampleRate"] as? NSNumber)?.doubleValue ?? 16000
+    let channels = (args["channels"] as? NSNumber)?.uint32Value ?? 1
+
+    close()
+
+    guard let pcmFormat = AVAudioFormat(
+      commonFormat: .pcmFormatInt16,
+      sampleRate: sampleRate,
+      channels: AVAudioChannelCount(channels),
+      interleaved: true
+    ) else {
+      result(false)
+      return
+    }
+
+    do {
+      let session = AVAudioSession.sharedInstance()
+      try session.setCategory(.playback, mode: .spokenAudio)
+      try session.setActive(true)
+
+      engine.attach(player)
+      engine.connect(player, to: engine.mainMixerNode, format: pcmFormat)
+      try engine.start()
+      player.play()
+      format = pcmFormat
+      started = true
+      scheduledFrames = 0
+      result(true)
+    } catch {
+      result(false)
+    }
+  }
+
+  private func write(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let data = call.arguments as? FlutterStandardTypedData,
+          let pcmFormat = format,
+          started
+    else {
+      result(nil)
+      return
+    }
+
+    let bytes = data.data
+    let frames = bytes.count / MemoryLayout<Int16>.size
+    guard frames > 0,
+          let buffer = AVAudioPCMBuffer(pcmFormat: pcmFormat, frameCapacity: AVAudioFrameCount(frames))
+    else {
+      result(nil)
+      return
+    }
+
+    buffer.frameLength = AVAudioFrameCount(frames)
+    bytes.withUnsafeBytes { raw in
+      if let destination = buffer.int16ChannelData?.pointee,
+         let source = raw.bindMemory(to: Int16.self).baseAddress {
+        destination.update(from: source, count: frames)
+      }
+    }
+
+    player.scheduleBuffer(buffer, completionHandler: nil)
+    scheduledFrames += frames
+    if !player.isPlaying { player.play() }
+    result(nil)
+  }
+
+  /// 近似水位：已排队帧数 − 播放器已推进帧数（不足时为 0）。
+  private func bufferedFrames() -> Int {
+    guard started,
+          let nodeTime = player.lastRenderTime,
+          let playerTime = player.playerTime(forNodeTime: nodeTime)
+    else { return 0 }
+    let remaining = scheduledFrames - Int(playerTime.sampleTime)
+    return remaining > 0 ? remaining : 0
+  }
+
+  private func flush() {
+    player.stop()
+    scheduledFrames = 0
+    if started { player.play() }
+  }
+
+  private func close() {
+    player.stop()
+    if engine.isRunning { engine.stop() }
+    if started {
+      try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    }
+    started = false
+    format = nil
+    scheduledFrames = 0
   }
 }

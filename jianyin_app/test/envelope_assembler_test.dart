@@ -31,7 +31,7 @@ void main() {
   });
 
   test('assembleFrame expands 42 joints and 46 bones', () {
-    const assembler = DefaultEnvelopeAssembler();
+    final assembler = DefaultEnvelopeAssembler();
     final left = List<LandmarkPoint>.generate(
       21,
       (i) => LandmarkPoint(x: i.toDouble(), y: 1, z: 0, v: 1),
@@ -58,7 +58,7 @@ void main() {
   });
 
   test('low visibility marks bone invalid', () {
-    const assembler = DefaultEnvelopeAssembler();
+    final assembler = DefaultEnvelopeAssembler();
     final left = List<LandmarkPoint>.generate(
       21,
       (i) => LandmarkPoint(
@@ -84,7 +84,7 @@ void main() {
   });
 
   test('handState none yields no frame', () {
-    const assembler = DefaultEnvelopeAssembler();
+    final assembler = DefaultEnvelopeAssembler();
     final frame = assembler.assembleFrame(
       ts: 1,
       handState: HandState.none,
@@ -94,7 +94,7 @@ void main() {
   });
 
   test('projectUplink omits bones and relation', () {
-    const assembler = DefaultEnvelopeAssembler();
+    final assembler = DefaultEnvelopeAssembler();
     final left = List<LandmarkPoint>.generate(
       21,
       (_) => const LandmarkPoint(x: 0.2, y: 0.3, z: 0, v: 0.9),

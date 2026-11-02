@@ -45,6 +45,8 @@
 
 **不部署视频媒体服务器**；云端不接收、不解码会话主路径视频。
 
+**实现现状（2026-11）**：API 组件已落地（`websocket-server/`）；**Recognition 与 Streaming TTS 仍为占位**（`src/pipeline/recognition.js`、`src/pipeline/tts.js`），暂无 `recognition` 与音频产出。最小可用落地见 [算法/云端/滑动窗口识别.md](../算法/云端/滑动窗口识别.md)「一期最小可用实现」与本文「流式 TTS 落地（最小可用）」。
+
 ## 端到端数据流
 
 ### 一期最小闭环
@@ -75,6 +77,24 @@
 |------|------|------|------|
 | 演示 | `csl_channels_v1` 多通道序列 | 轻量时序 + 有限词表；必须按 [算法/云端/滑动窗口识别.md](../算法/云端/滑动窗口识别.md) 消费 path/body/nonmanual；运动公式见客户端算法 | 冒烟 + 开声延迟 |
 | 生产 | 同上（协议不变） | 更大模型 / 更多数据 | WER、P50/P95 |
+
+「演示」的具体实现（缓冲、段切分、特征、打分与验收点）见 [算法/云端/滑动窗口识别.md](../算法/云端/滑动窗口识别.md)「一期最小可用实现」。
+
+## 流式 TTS 落地（最小可用）
+
+**现状（2026-11）**：`websocket-server/src/pipeline/tts.js` 为空实现——返回空 `chunks`，只发一条 `last:true` 的空二进制帧，因此 App 收不到可播音频。下面是替换该占位的最小实现。
+
+| 项 | 要求 |
+|----|------|
+| 位置 | 先在 `websocket-server/src/pipeline/tts.js` 内实现；需要独立扩缩容时再拆 `services/tts/` |
+| 输入 | `recognition.text`、`vocabVersion`、语速参数 |
+| 输出 | **PCM s16le / 16 kHz / mono**，分片 **100 ms（1600 samples，`config.ttsChunkSamples`）**；每片前一条 `audio.header`，`seq` 递增，末片 `last:true`（可为空二进制） |
+| 首包 | 边合成边下发，**服务端不整句缓存**；与识别侧共同满足「识别出词 → 开声 < 1.5 s」（见 [roadmap.md](./roadmap.md)） |
+| 串行 | 多句严格按 `utteranceId`：上一句 `last:true` 之后才发下一句的 `speech` + 首片，服务端不交错 |
+| 会话归属 | 只向产生该 `recognition` 的 `session.appWs` 扇出；`session_replaced` / REST stop / 空闲回收后立即停止下发 |
+| 背压 | `ws.bufferedAmount` 超阈值（起点 256 KB ≈ 8 s 音频）时丢**未发送的最旧片**保实时，不阻塞识别 |
+
+**可替换点**：`synthesizePcmChunks(text)` 视为接口；换成真实合成器（云厂商流式 TTS 或本地模型）时，分片长度、`audio.header` 时序与串行规则不变。帧字段见 [../../api/protocol.md](../../api/protocol.md) 的 `speech` / `audio.header` / 二进制音频帧。
 
 ## 安全与隐私
 

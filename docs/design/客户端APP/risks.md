@@ -17,6 +17,8 @@
 | 9 | 阀门一期冷启动加载，不热更新 |
 | 10 | **识别会话绑定 Home**：进 Home 开后置相机并连 WS；离 Home / 退出应用全停；Home 上熄屏与后台**保持** WS 与转译播音（见 [architecture.md](./architecture.md)） |
 
+**实现现状（2026-11）**：第 5–9 条策略尚未落地——抽帧只有 `Idle/Active` 与清晰度门控（无 `PeakHold` / `Reject`、无抖动分档 `J_soft` / `J_hard`）；机位枚举 `A1–A8` 与 4 阀门未接入（`viewpoint_class` 恒 `'N0'`）；18 个提示键仅落地 `hint.show_upper_body`。端侧保活（Android 前台服务 / iOS `UIBackgroundModes`）亦未实现，见 [architecture.md](./architecture.md)。
+
 ## 失败场景与降级
 
 | 场景 | 期望行为 | UX 提示 |

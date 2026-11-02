@@ -29,14 +29,16 @@ WS 文本帧公共字段：
 
 ## REST
 
-Base URL：`http://<host>:<port>`（示例 `8000`）
+Base URL：`http://<host>:<port>`。服务端默认监听 `0.0.0.0:8000`（可用 `HOST` / `PORT` 覆盖，见 `websocket-server/.env.example`）；客户端的默认地址与端口定义在 `jianyin_app/lib/config/api_config.dart`。**联调前两侧必须一致**，当前默认值不同，属未对齐项（见文末「实现现状」）。
 
 | Method | Path | 鉴权 | 说明 |
 |--------|------|------|------|
 | GET | `/health` | 无 | 健康检查 |
-| POST | `/api/v1/auth/register` | 无 | 手机号注册，返回 JWT |
+| POST | `/api/v1/auth/send-otp` | 无 | 下发注册验证码（非 production 响应含 `code`） |
+| POST | `/api/v1/auth/verify-otp` | 无 | 校验验证码（`register` 内亦会校验） |
+| POST | `/api/v1/auth/register` | 无 | 手机号注册（**必须带 `code`**），返回 JWT |
 | POST | `/api/v1/auth/login` | 无 | 手机号登录，返回 JWT |
-| POST | `/api/v1/auth/demo-token` | 无 | 演示 JWT。仅 debug |
+| POST | `/api/v1/auth/demo-token` | 无 | 演示 JWT。仅 debug；客户端不使用 |
 | GET | `/api/v1/me` | Bearer | 当前用户资料 |
 | PATCH | `/api/v1/me` | Bearer | 更新 username / sex |
 | GET | `/api/v1/history` | Bearer | 用户字幕历史（按日） |
@@ -95,26 +97,50 @@ HS256。payload 至少包含：
 }
 ```
 
+### POST `/api/v1/auth/send-otp`
+
+注册前先取验证码。服务端生成 6 位数字码，仅存内存、**不落盘**，有效期 60 s；再次请求同号会覆盖旧码（`websocket-server/src/auth/otp_store.js`）。
+
+```json
+{ "phone": "13800138000" }
+```
+
+```json
+{ "sent": true, "phone": "13800138000" }
+```
+
+- 非 production（`NODE_ENV !== "production"`）时响应额外带 `code`，便于本地联调；production **不返回** `code`。
+- 失败：`400` `{ "code": "bad_request" | "invalid_phone", "message": "..." }`。
+
+### POST `/api/v1/auth/verify-otp`
+
+```json
+{ "phone": "13800138000", "code": "123456" }
+```
+
+- 成功：`200` `{ "valid": true, "phone": "13800138000" }`。
+- 失败：`400` `{ "code": "bad_request" | "invalid_otp", "message": "..." }`。
+
 ### POST `/api/v1/auth/register`
 
 ```json
 {
   "phone": "13800138000",
   "password": "at-least-8-chars",
-  "username": "optional",
-  "sex": "unknown",
+  "code": "123456",
   "deviceId": "optional-string"
 }
 ```
 
 - `phone`：中国大陆 11 位手机号（`1` 开头）。
 - `password`：至少 8 字符。确认密码仅客户端校验，不上行。
-- `username`：可选；缺省为 `用户` + 手机后四位。
-- `sex`：可选；`male` \| `female` \| `unknown`；缺省 `unknown`。
+- `code`：**必填**，须与 `send-otp` 为该手机号下发的 6 位码一致；校验通过后该码立即失效，不可复用。
+- `deviceId`：可选；本机设备 ID，写入 JWT。
+- **本版不接受 `username` / `sex`**：注册时 `username` 由服务端派生为 `用户` + 手机后四位，`sex` 固定 `unknown`；如需修改走 `PATCH /api/v1/me`。
 - 成功：`201` + Token 响应（`role` 固定 `app`）。
-- 失败：`400` `{ "code": "invalid_phone" | "weak_password" | "invalid_sex", "message": "..." }`；`409` `{ "code": "phone_taken", "message": "..." }`。
+- 失败：`400` `{ "code": "bad_request", "message": "phone, password, and code are required" }`；`400` `{ "code": "invalid_otp", "message": "..." }`；`400` `{ "code": "invalid_phone" | "weak_password", "message": "..." }`；`409` `{ "code": "phone_taken", "message": "..." }`。
 
-本版不定义验证码、邮箱或第三方登录字段。
+本版只定义短信验证码；不定义邮箱或第三方登录。
 
 ### POST `/api/v1/auth/login`
 
@@ -126,12 +152,14 @@ HS256。payload 至少包含：
 }
 ```
 
+登录不校验验证码。
+
 - 成功：`200` + Token 响应。
 - 失败：`400` `{ "code": "invalid_phone", "message": "..." }`；`401` `{ "code": "invalid_credentials", "message": "..." }`。
 
 ### POST `/api/v1/auth/demo-token`
 
-仅 debug 构建。release 构建不得调用。
+仅 debug 构建（服务端按 `NODE_ENV !== "production"` 判定）。release 构建不得调用。客户端当前**未调用**该端点（`jianyin_app/lib/session/api_client.dart` 只实现 `send-otp` / `register` / `login`），保留用于联调脚本与手工验证。
 
 ```json
 { "role": "app", "deviceId": "optional-string" }
@@ -229,11 +257,25 @@ Query 可选：`from`、`to`（`YYYY-MM-DD`，含端点）。
 {
   "vocabVersion": "2026.04.1",
   "language": "CSL",
-  "gestures": [
+"gestures": [
     { "id": "hello", "text": "你好", "aliases": ["您好"] }
   ]
 }
 ```
+
+- 当前演示词表为 **8 个词条**（`vocabVersion: 2026.04.1`，见 `websocket-server/src/data/gestures.json`）；词表变更须同时提升 `vocabVersion`。
+
+### GET `/api/v1/devices`
+
+```json
+{
+  "devices": [
+    { "deviceId": "app-xxx", "role": "app", "online": true, "lastSeen": 1710000000000 }
+  ]
+}
+```
+
+- 当前返回服务端**全局**设备视图，未按账号过滤（待收紧，见文末「实现现状」）。
 
 ### POST `/api/v1/sessions`
 
@@ -251,6 +293,9 @@ Query 可选：`from`、`to`（`YYYY-MM-DD`，含端点）。
   "wsUrl": "wss://example/ws/app"
 }
 ```
+
+- 成功：`201` + 响应；`wsUrl` 依据请求 `Host` 头生成（局域网访问即得局域网地址，见 `websocket-server/README.md`）。
+- 只需 `app` 角色的 Bearer；`edgeDeviceId` 仅在边缘接入时填写，普通 App 会话留空。
 
 创建成功后，同一 `userId` 上更早的 App 连接收到 WS `error.code = session_replaced`。边缘忙：HTTP `409`，`{ "code": "device_busy", "message": "..." }`。该错误拒绝后来者，不踢掉已附着的边缘会话。
 
@@ -277,29 +322,31 @@ Query 可选：`from`、`to`（`YYYY-MM-DD`，含端点）。
 
 ### 文本事件
 
-| type | 方向 | 说明 |
+| type / 标识 | 方向 | 说明 |
 |------|------|------|
-| `ping` / `pong` | 双向 | 心跳 |
+| `ping` / `pong` | 双向 | 心跳（15 s）。服务端另有 WebSocket 协议级 ping |
 | `session.start` / `session.stop` | 非一期 App | 一期 App 不发送。会话只由 REST 建立和结束 |
-| `session.started` / `session.stopped` | 云 → App | 确认 |
-| `landmarks` | App 或边缘 → 云 | 关键点帧 |
+| `session.started` / `session.stopped` | 云 → App | 确认（一期 App 可接收，不驱动会话状态） |
+| `landmarks` | App 或边缘 → 云 | 关键点帧；一期 App 上行必带 `sessionId` |
 | `recognition` | 云 → App | 字幕 |
 | `speech` | 云 → App / 穿戴 | 播音元数据（对齐二进制音频） |
 | `device.status` | 边缘/穿戴 → 云 | 状态 |
 | `device.online` | 云 → App | 上下线 |
 | `error` | 云 → 客户端 | 错误 |
 | `audio.header` | 云 → 客户端 | 随后二进制音频帧的说明（可选，见下） |
+| `gesture_skeleton_envelope_v1` 身份消息 | App → 云 | **无 `type` 字段**。`kind: "catalog"` 为信封身份目录，用于对齐身份与日志，不参与识别：`{"envelope":"gesture_skeleton_envelope_v1","kind":"catalog","ts":0}` |
 
 ### `error.code`
 
 | code | 含义 |
 |------|------|
-| `unauthorized` | 鉴权失败或过期 |
-| `device_busy` | 边缘已被占用 |
-| `session_not_found` | sessionId 无效 |
-| `rate_limited` | 过载 |
-| `internal` | 内部错误 |
+| `unauthorized` | 鉴权失败、token 过期，或握手 `protocolVersion` 与服务端不一致 |
+| `session_not_found` | `sessionId` 无效，或会话已非 `active` |
+| `internal` | 内部错误（含上行 JSON 解析失败） |
 | `session_replaced` | 同一账号已有更新的 App 会话，本连接被替换 |
+
+- `device_busy` **不是** WS 错误码：边缘设备冲突由 `POST /api/v1/sessions` 返回 HTTP `409`。
+- 本版未实现限流，因此不定义 `rate_limited`。
 
 ### `landmarks`
 
@@ -474,13 +521,28 @@ Query 可选：`from`、`to`（`YYYY-MM-DD`，含端点）。
 
 ## 会话流程（摘要）
 
-1. Token（login/register）→ `POST /sessions` → 连接对应 `/ws/*`（Header Bearer）。
-2. 端侧上行 `landmarks`。
+1. 取 Token：`send-otp` + `register`（首次注册）或 `login` → `POST /api/v1/sessions` → 连接 `/ws/app`（Header Bearer；Query `deviceId` / `protocolVersion` / `sessionId`）。
+2. 端侧上行 `landmarks`（`csl_channels_v1`）。
 3. 云端 `recognition` + `speech`（`ws_binary_audio`）+ 二进制音频；字幕写入用户历史。
-4. `POST .../stop` 或 `session.stop` → 断开。
+4. `POST /api/v1/sessions/{id}/stop` → 断开；离开 Home 页亦走该路径。
 
 ## 版本策略
 
 - `protocolVersion: 1` 冻结。
 - 兼容：新可选字段；忽略未知字段。
 - 关键点 `schema` 演进用新 schema 名，勿复用旧名改语义。
+- 握手 `protocolVersion` 与服务端 `config.protocolVersion` 不一致时，服务端以 `unauthorized` 关闭连接。
+
+## 实现现状（对齐用 · 2026-11 快照）
+
+本节只记录契约与实现的差距，**不改变任何字段定义**；用于联调对照与排期。
+
+| 部分 | 现状 |
+|------|------|
+| REST：auth / me / history / membership / devices / gestures / sessions | 已实现（`websocket-server/src/rest/routes.js`） |
+| WS：握手鉴权、心跳、会话互斥、空闲回收 | 已实现（`websocket-server/src/ws/gateway.js`、`heartbeat.js`） |
+| 上行 `landmarks`（`csl_channels_v1`） | 已实现（`jianyin_app/lib/ws/app_ws_client.dart`）；默认接口地址需与服务端对齐 |
+| 下行 `recognition` | **未实现**：识别管线为空实现，暂无产出（`websocket-server/src/pipeline/recognition.js`） |
+| 下行 `speech` + 二进制音频帧 | **未实现**：TTS 返回空 `chunks`（`websocket-server/src/pipeline/tts.js`） |
+| 客户端播放（抖动缓冲、按句串行） | **未实现**：客户端尚无音频播放能力，`audio.header` 与二进制帧仅被接收 |
+| `GET /api/v1/devices` | 返回服务端全局设备视图，**未按账号过滤**（待收紧） |

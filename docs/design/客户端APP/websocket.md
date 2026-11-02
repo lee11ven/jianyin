@@ -69,6 +69,7 @@ debug 构建的 Bearer 可以来自 `POST /api/v1/auth/demo-token`。release 构
 |------|------|------|
 | landmarks | `csl_channels_v1`：手形、轨迹、身体、非手控 | 15-30 Hz |
 | ping | 心跳 | 15s |
+| （无 `type`）信封身份消息 | `envelope: "gesture_skeleton_envelope_v1"` + `kind: "catalog"`；连接成功后发一次，只用于对齐 catalog 身份与日志，不参与识别 | 每连接 1 次 |
 
 App 不发送 `session.start`、`session.stop`、`device.status`。
 
@@ -155,10 +156,10 @@ App 不发送 `session.start`、`session.stop`、`device.status`。
 | code 或场景 | 行为 |
 |------|------|
 | unauthorized | Token 过期或鉴权失败。关 WS，提示重新登录。不回退 demo-token |
-| device_busy | 边缘设备已被占用。提示换设备或等待。不踢掉边缘上的旧会话 |
+| device_busy（REST `409`；**非** WS 错误帧） | 边缘设备已被占用。提示换设备或等待。不踢掉边缘上的旧会话 |
 | session_replaced | 同一账号的新会话已建立。本端 Flushing，关 WS，提示已在其他设备继续 |
 | session_not_found | sessionId 无效。关 WS，提示重新建会话 |
-| rate_limited | 过载。退避后重试；播音不叠句 |
+| 过载（**本版未定义 `rate_limited`**） | 不做专门处理：走下方退避重连规则；播音不叠句 |
 | internal | 提示用户。会话是否保留由该次连接是否仍可用决定 |
 | 死连接（45s 无心跳） | 播音 Flushing。会话未结束则重连，UI 显示重连中。重连成功后 tts/ 为 Idle，不续播旧句 |
 | 网络断开 | 指数退避重连（上限 30s）；播音进入 Flushing |

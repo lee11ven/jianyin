@@ -1,9 +1,17 @@
-import { frame, sendBinary, sendJson } from '../protocol.js';
+import { frame, sendJson } from '../protocol.js';
 import { appendHistory } from '../session/history.js';
 import { appendUserHistory } from '../auth/user_history.js';
 import { getSession, touchSession } from '../session/store.js';
-import { synthesizePcmChunks } from '../pipeline/tts.js';
+import { TtsDispatcher, wsTarget } from '../pipeline/tts_queue.js';
 import { markAlive } from './heartbeat.js';
+
+/** 流式 TTS 调度器：按 `utteranceId` 串行、首包立即下发、背压丢最旧未发送片。 */
+const ttsDispatcher = new TtsDispatcher();
+
+/** 会话结束 / 被替换时清空该会话的 TTS 队列（由 gateway / REST 停止路径调用）。 */
+export function cancelTts(sessionId) {
+  ttsDispatcher.cancel(sessionId);
+}
 
 const ENVELOPE_ID = 'gesture_skeleton_envelope_v1';
 
@@ -134,64 +142,22 @@ export function deliverRecognitionResult(result) {
     vocabVersion: result.vocabVersion,
   });
 
-  const targets = [session.appWs, session.wearableWs].filter(
-    (s) => s && s.readyState === 1,
+const sockets = [session.appWs, session.wearableWs].filter(
+    (sock) => sock && sock.readyState === 1,
   );
 
-  for (const target of targets) {
-    sendJson(target, recognitionMsg);
+  // 字幕立即下发，不等音频。
+  for (const socket of sockets) {
+    sendJson(socket, recognitionMsg);
   }
 
-  const { mimeType, sampleRate, channels, encoding, chunks } = synthesizePcmChunks(result.text);
+  if (sockets.length === 0) return;
 
-  const speechMeta = frame('speech', {
+  // 音频交给调度器：按 utteranceId 串行、边合成边下发、背压丢片。
+  ttsDispatcher.enqueue({
     sessionId: result.sessionId,
     utteranceId: result.utteranceId,
     text: result.text,
-    delivery: 'ws_binary_audio',
-    mimeType,
-    sampleRate,
-    channels,
-    encoding,
+    targets: sockets.map((socket) => wsTarget(socket)),
   });
-
-  for (const target of targets) {
-    sendJson(target, speechMeta);
-  }
-
-  for (let seq = 0; seq < chunks.length; seq++) {
-    const last = seq === chunks.length - 1;
-    const header = frame('audio.header', {
-      sessionId: result.sessionId,
-      utteranceId: result.utteranceId,
-      seq,
-      mimeType,
-      sampleRate,
-      channels,
-      encoding,
-      last,
-    });
-    for (const target of targets) {
-      sendJson(target, header);
-      sendBinary(target, chunks[seq]);
-    }
-  }
-
-  // Ensure last:true even if empty (protocol allows empty binary on last)
-  if (chunks.length === 0) {
-    const header = frame('audio.header', {
-      sessionId: result.sessionId,
-      utteranceId: result.utteranceId,
-      seq: 0,
-      mimeType,
-      sampleRate,
-      channels,
-      encoding,
-      last: true,
-    });
-    for (const target of targets) {
-      sendJson(target, header);
-      sendBinary(target, Buffer.alloc(0));
-    }
-  }
 }

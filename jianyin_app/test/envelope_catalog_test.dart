@@ -51,8 +51,10 @@ void main() {
       handStatePrior: HandState.none,
       forcePathGap: true,
     );
-    expect(msg.toJson()['schema'], CslChannelsLandmarks.schema);
-    expect(msg.path?.gap, true);
+    expect(msg, isNotNull);
+    final landmarks = msg!;
+    expect(landmarks.toJson()['schema'], CslChannelsLandmarks.schema);
+    expect(landmarks.path?.gap, true);
     await pipeline.dispose();
   });
 }

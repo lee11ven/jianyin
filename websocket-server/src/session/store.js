@@ -26,24 +26,37 @@ const accountSessions = new Map();
 /** edgeDeviceId -> sessionId */
 const edgeBusy = new Map();
 
-/** deviceId -> { deviceId, role, online, lastSeen } */
+/** deviceId -> { deviceId, role, online, lastSeen, accountKey } */
 const devices = new Map();
 
 function newSessionId() {
   return `sess-${randomBytes(8).toString('hex')}`;
 }
 
-export function listDevices() {
-  return Array.from(devices.values());
+/**
+ * 设备视图。传 `accountKey` 时**只返回该账号的设备**（鉴权边界）；
+ * 不传时返回全局视图，仅供服务端内部诊断使用。
+ */
+export function listDevices(accountKey) {
+  const all = Array.from(devices.values());
+  if (!accountKey) return [];
+  return all.filter((device) => device.accountKey === accountKey);
 }
 
-export function setDeviceOnline(deviceId, role, online) {
-  const prev = devices.get(deviceId) || { deviceId, role, online: false, lastSeen: 0 };
+export function setDeviceOnline(deviceId, role, online, accountKey) {
+  const prev = devices.get(deviceId) || {
+    deviceId,
+    role,
+    online: false,
+    lastSeen: 0,
+    accountKey: null,
+  };
   devices.set(deviceId, {
     ...prev,
     role,
     online,
     lastSeen: Date.now(),
+    accountKey: accountKey ?? prev.accountKey ?? null,
   });
 }
 

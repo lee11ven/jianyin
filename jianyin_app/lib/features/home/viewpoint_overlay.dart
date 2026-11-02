@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../perception/viewpoint.dart';
 import '../../session/home_session_controller.dart';
 import '../../theme/tokens.dart';
 
@@ -7,14 +8,18 @@ import '../../theme/tokens.dart';
 class ViewpointOverlay extends StatefulWidget {
   const ViewpointOverlay({
     super.key,
-    required this.offline,
+required this.offline,
     required this.caption,
     required this.faceTracker,
     required this.screenWidthDp,
+    this.band,
   });
 
   final bool offline;
   final String caption;
+
+  /// 机位档：绿/黄/红驱动取景框三色；null 时按 [offline] 取红/绿。
+  final ValveBand? band;
   final FaceTracker faceTracker;
   final double screenWidthDp;
 
@@ -60,7 +65,13 @@ class _ViewpointOverlayState extends State<ViewpointOverlay>
 
   @override
   Widget build(BuildContext context) {
-    final color = widget.offline ? AppTokens.vpRed : AppTokens.vpGreen;
+    final color = widget.offline
+        ? AppTokens.vpRed
+        : switch (widget.band ?? ValveBand.green) {
+            ValveBand.green => AppTokens.vpGreen,
+            ValveBand.yellow => AppTokens.vpYellow,
+            ValveBand.red => AppTokens.vpRed,
+          };
     final frameW = widget.screenWidthDp * 0.72;
     final frameH = frameW * 4 / 3;
 

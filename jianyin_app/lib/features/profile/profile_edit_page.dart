@@ -3,7 +3,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../router/app_router.dart';
 import '../../session/auth_store.dart';
-import '../../session/session_models.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/app_buttons.dart';
 import '../../widgets/app_field.dart';

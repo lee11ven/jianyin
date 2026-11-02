@@ -1,6 +1,6 @@
 # 非功能指标、评测与里程碑
 
-本期为架构文档；**不含编码任务**。
+指标与里程碑基线。编码是否完成以下文「实现期里程碑」的**现状**列与仓库实际为准。
 
 ## 非功能指标（MVP）
 
@@ -33,19 +33,21 @@
 | [../../api/protocol.md](../../api/protocol.md) | 契约 |
 | 本文 | 指标与里程碑 |
 
-## 实现期里程碑（日后）
+## 实现期里程碑
+
+里程碑现状以仓库实际为准（`jianyin_app/`、`websocket-server/`），状态日期 2026-11。
 
 ### 第一期
 
-| 阶段 | 目标 |
-|------|------|
-| P1-0 | 骨架与契约 |
-| P1-1 | REST + `/ws/app|edge|wearable` |
-| P1-2 | 关键点识别 + 流式 TTS 二进制下行 |
-| P1-3 | Flutter：本地 MediaPipe + 播 WS 音频 |
-| P1-4 | edge-simulator / wearable mock |
+| 阶段 | 目标 | 现状 |
+|------|------|------|
+| P1-0 | 骨架与契约 | **已达成**：信封 catalog、身体 / 轨迹 / 手形身份、MediaPipe 双端桥 |
+| P1-1 | REST + `/ws/app|edge|wearable` | **App 侧已达成**（`lib/ws`、`lib/session`）；`/ws/edge`、`/ws/wearable` 仅契约 |
+| P1-2 | 关键点识别 + 流式 TTS 二进制下行 | **未达成**：端侧已真上行；云端识别与 TTS 仍为占位（`src/pipeline/recognition.js`、`src/pipeline/tts.js`） |
+| P1-3 | Flutter：本地 MediaPipe + 播 WS 音频 | **一半**：本地 MediaPipe 已落地；**播 WS 音频未实现**（`lib/tts/` 未创建） |
+| P1-4 | edge-simulator / wearable mock | **未开始** |
 
-**一期完成判据**：App 演示「本地抽点 → 字幕 → WS 音频流」；**无视频推流依赖**。
+**一期完成判据**：App 演示「本地抽点 → 字幕 → WS 音频流」；**无视频推流依赖**。**当前未达成**，缺口为云端识别、流式 TTS 与端侧播音。
 
 ### 第二期
 

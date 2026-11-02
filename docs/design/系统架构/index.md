@@ -2,7 +2,7 @@
 
 面向听障/哑语场景：端侧提取手语关键点 → 云端识别为文本 → 流式 TTS → 手机 App / 语音穿戴实时播放。
 
-> 本期交付为**架构设计文档**，不包含业务代码实现。
+> 本文档体系是设计基线。一期客户端（`jianyin_app/`）与网关（`websocket-server/`）已有实现；**契约与实现的差距**见 [roadmap.md](./roadmap.md) 与各文档的「实现现状」小节。
 
 ## 产品定位
 
@@ -37,7 +37,7 @@
 |------|----------|----------|
 | [architecture.md](./architecture.md) | 系统结构、方案 A 数据流、识别分层 | 不罗列字段表 |
 | [websocket.md](./websocket.md) | 长连接行为、音频流播放、失败处理 | 不重复全量 JSON 示例 |
-| [modules.md](./modules.md) | 模块职责与目标目录 | 不写协议细节 |
+| [modules.md](./modules.md) | 模块职责与**规划 → 实际仓库映射** | 不写协议细节 |
 | [roadmap.md](./roadmap.md) | 指标、里程碑、评测 | 不写组件内部设计 |
 | [risks.md](./risks.md) | 风险、开放问题、已采纳优化 | — |
 | [算法/客户端/index.md](../算法/客户端/index.md) | 一期 Flutter 端侧抽帧、骨架、轨迹与多器官算法边界；下行播音总述 | 不写模型结构与训练；不写业务代码 |
@@ -55,11 +55,18 @@
 |------|------|
 | [architecture.md](./architecture.md) | 系统架构（方案 A） |
 | [websocket.md](./websocket.md) | WebSocket 会话与语音流 |
-| [modules.md](./modules.md) | 模块与仓库结构规划 |
-| [roadmap.md](./roadmap.md) | 非功能指标与里程碑 |
+| [modules.md](./modules.md) | 模块职责与仓库落点映射 |
+| [roadmap.md](./roadmap.md) | 非功能指标与里程碑（含实现现状） |
 | [risks.md](./risks.md) | 风险与开放问题 |
+| [客户端APP/index.md](../客户端APP/index.md) | Flutter App 架构总览与验收口径 |
+| [客户端APP/architecture.md](../客户端APP/architecture.md) | Home 生命周期状态机与拆除顺序 |
+| [客户端APP/modules.md](../客户端APP/modules.md) | 客户端模块职责与落地路径 |
+| [客户端APP/websocket.md](../客户端APP/websocket.md) | App 侧 `/ws/app` 行为 |
+| [客户端APP/roadmap.md](../客户端APP/roadmap.md) | App 里程碑与验收（含实现现状） |
+| [客户端APP/risks.md](../客户端APP/risks.md) | App 风险与同屏提示全序 |
 | [算法/客户端/index.md](../算法/客户端/index.md) | 客户端算法总览 |
-| [算法/客户端/视频流抽帧.md](../算法/客户端/视频流抽帧.md) | 视频流抽帧算法 |
+| [算法/客户端/视频流抽帧.md](../算法/客户端/视频流抽帧.md) | 视频流抽帧算法（含落地计划） |
+| [算法/客户端/机位矫正.md](../算法/客户端/机位矫正.md) | 取景框三色与提示胶囊 |
 | [算法/客户端/帧手势骨架提取.md](../算法/客户端/帧手势骨架提取.md) | 帧手势骨架提取算法 |
 | [算法/客户端/左右手骨架提取.md](../算法/客户端/左右手骨架提取.md) | 左右手骨架提取（单双手/交叉/遮挡） |
 | [算法/客户端/手势骨架信封.md](../算法/客户端/手势骨架信封.md) | 手势骨架信封（手形、轨迹、身体、轨迹段） |

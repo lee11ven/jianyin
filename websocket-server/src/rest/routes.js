@@ -15,7 +15,12 @@ import {
   subscribe,
 } from '../auth/membership.js';
 import { listUserHistoryDays } from '../auth/user_history.js';
-import { extractBearer, issueToken, verifyToken } from '../auth/tokens.js';
+import {
+  extractBearer,
+  issueDemoToken,
+  issueToken,
+  verifyToken,
+} from '../auth/tokens.js';
 import {
   buildWsUrl,
   createSession,
@@ -166,6 +171,24 @@ export function createRestRouter(hooks = {}) {
     }
   });
 
+  /**
+   * POST /api/v1/auth/demo-token
+   * Body: { role?: 'app'|'edge'|'wearable', deviceId?: string }
+   * **仅 debug 构建**（`NODE_ENV !== "production"`）；release 返回 404。
+   * 契约见 docs/api/protocol.md。
+   */
+  router.post('/api/v1/auth/demo-token', (req, res) => {
+    if (!isDebugBuild()) {
+      return res.status(404).json({ code: 'not_found', message: 'demo-token is disabled' });
+    }
+    try {
+      const { role = 'app', deviceId } = req.body || {};
+      res.json(issueDemoToken({ role, deviceId }));
+    } catch (err) {
+      sendAuthError(res, err);
+    }
+  });
+
   router.get('/api/v1/me', requireAuth, (req, res) => {
     const user = findUserById(req.auth.userId);
     if (!user) {
@@ -218,8 +241,9 @@ export function createRestRouter(hooks = {}) {
     }
   });
 
-  router.get('/api/v1/devices', requireAuth, (_req, res) => {
-    res.json({ devices: listDevices() });
+  router.get('/api/v1/devices', requireAuth, (req, res) => {
+    // 只返回当前账号的设备（设备视图不再全局可见）。
+    res.json({ devices: listDevices(req.auth.userId) });
   });
 
   router.get('/api/v1/gestures', requireAuth, (_req, res) => {

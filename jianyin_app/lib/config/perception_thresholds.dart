@@ -18,7 +18,19 @@ class PerceptionThresholds {
     this.trackAssociateDist = 0.12,
     this.smoothAlpha = 0.45,
     this.palmVisibilityScale = 0.85,
+    this.jLightFactor = 1.8,
+    this.jHeavyFactor = 3.0,
+    this.peakHoldMinIntervalMs = 60,
   });
+
+  /// 轻抖门槛：运动能量 ≥ `tOnset × jLightFactor`。
+  final double jLightFactor;
+
+  /// 重抖门槛：运动能量 ≥ `tOnset × jHeavyFactor`（拒帧 + `hint.hold_steady`）。
+  final double jHeavyFactor;
+
+  /// `PeakHold` 的最小间隔：抑制均匀抽稀漏掉动作峰值帧。
+  final int peakHoldMinIntervalMs;
 
   /// Nose / shoulder minimum visibility to build body axes.
   final double vAnchor;

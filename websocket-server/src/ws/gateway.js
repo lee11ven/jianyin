@@ -12,7 +12,7 @@ import {
   stopSession,
   touchSession,
 } from '../session/store.js';
-import { createMessageHandler, deliverRecognitionResult } from './handlers.js';
+import { cancelTts, createMessageHandler, deliverRecognitionResult } from './handlers.js';
 import { markAlive, startHeartbeat } from './heartbeat.js';
 import { RecognitionPipeline } from '../pipeline/recognition.js';
 
@@ -38,10 +38,11 @@ export function attachWebSocketGateway(server) {
   const idleTimer = setInterval(() => {
     const now = Date.now();
     for (const s of listActiveSessions()) {
-      if (now - s.lastActivityAt > config.sessionIdleMs) {
+if (now - s.lastActivityAt > config.sessionIdleMs) {
         notifyAndCloseSession(s, 'session idle timeout');
         stopSession(s.sessionId);
         recognition.reset(s.sessionId);
+        cancelTts(s.sessionId);
       }
     }
   }, 60_000);
@@ -139,7 +140,7 @@ export function attachWebSocketGateway(server) {
       ws.sessionId = sessionId;
       attachWs(sessionId, 'app', ws);
       touchSession(sessionId);
-      setDeviceOnline(resolvedDeviceId, 'app', true);
+setDeviceOnline(resolvedDeviceId, 'app', true, auth.userId);
       broadcastDeviceOnline(session, resolvedDeviceId, 'app', true);
       sendJson(ws, frame('session.started', { sessionId }));
     } else if (role === 'edge') {
@@ -161,7 +162,7 @@ export function attachWebSocketGateway(server) {
         touchSession(session.sessionId);
         broadcastDeviceOnline(session, resolvedDeviceId, 'edge', true);
       }
-      setDeviceOnline(resolvedDeviceId, 'edge', true);
+setDeviceOnline(resolvedDeviceId, 'edge', true, auth.userId);
     } else if (role === 'wearable') {
       let session = null;
       if (sessionId) {
@@ -175,7 +176,7 @@ export function attachWebSocketGateway(server) {
       } else {
         ws.sessionId = null;
       }
-      setDeviceOnline(resolvedDeviceId, 'wearable', true);
+      setDeviceOnline(resolvedDeviceId, 'wearable', true, auth.userId);
     }
 
     ws.on('pong', () => markAlive(ws));
@@ -185,7 +186,7 @@ export function attachWebSocketGateway(server) {
     });
 
     ws.on('close', () => {
-      setDeviceOnline(resolvedDeviceId, role, false);
+      setDeviceOnline(resolvedDeviceId, role, false, auth.userId);
       if (ws.sessionId) {
         const session = getSession(ws.sessionId);
         detachWs(ws.sessionId, role, ws);
@@ -233,6 +234,9 @@ function broadcastDeviceOnline(session, deviceId, role, online) {
  * @param {string} [reason]
  */
 export function notifyAndCloseSession(session, reason = 'session stopped') {
+  // 收句：停止该会话正在下发与排队的音频，避免已结束会话继续推流。
+  cancelTts(session.sessionId);
+
   const stopped = frame('session.stopped', {
     sessionId: session.sessionId,
     reason,

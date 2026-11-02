@@ -73,6 +73,7 @@ class _HomePageState extends State<HomePage> {
                     setState(() => _showUpperBodyHint = show);
                   },
                   onLandmarks: _session.onLandmarks,
+                  onPerception: _session.onPerception,
                 ),
                 ListenableBuilder(
                   listenable: _session.faceTracker,
@@ -83,7 +84,10 @@ class _HomePageState extends State<HomePage> {
                       children: [
                         ViewpointOverlay(
                           offline: _session.vpOffline,
-                          caption: _session.vpCaption,
+                          caption: _session.hintText.isNotEmpty
+                              ? _session.hintText
+                              : _session.vpCaption,
+                          band: _session.vpBand,
                           faceTracker: faceTracker,
                           screenWidthDp: screenW,
                         ),

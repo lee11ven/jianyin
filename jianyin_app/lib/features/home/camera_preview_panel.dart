@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../camera/frame_sampler.dart';
 import '../../perception/perception_runtime.dart';
+import '../../perception/viewpoint.dart';
 
 /// Rear camera preview + Idle/Active frame sampler -> perception tick.
 ///
@@ -15,12 +16,16 @@ class CameraPreviewPanel extends StatefulWidget {
     this.onCameraReady,
     this.onHintShowUpperBody,
     this.onLandmarks,
+    this.onPerception,
   });
 
   /// Fired once when rear preview is initialized (before / with perception).
   final VoidCallback? onCameraReady;
   final ValueChanged<bool>? onHintShowUpperBody;
   final ValueChanged<Map<String, dynamic>>? onLandmarks;
+
+  /// 每拍上报机位档与抖动档（驱动顶栏提示与取景框三色）。
+  final void Function(ViewpointEstimate estimate, ShakeTier shakeTier)? onPerception;
 
   @override
   State<CameraPreviewPanel> createState() => _CameraPreviewPanelState();
@@ -83,10 +88,18 @@ class _CameraPreviewPanelState extends State<CameraPreviewPanel> {
               ts: req.ts,
               frame: req.frame,
               handStatePrior: req.handState,
-              viewpointClass: req.viewpointClass,
+              // 机位结论按上一拍回填：同一拍内 body 先算，机位随之更新。
+              viewpointClass: runtime.viewpoint.className.code,
               forcePathGap: req.forcePathGap,
               omitHands: req.omitHands,
             );
+
+            // 机位估计 → 黄档加严 / 红档拒发 回填抽帧器，并上报 UI。
+            final estimate = runtime.refreshViewpoint();
+            sampler?.setViewpointQualityScale(estimate.sharpnessScale);
+            sampler?.setViewpointRejects(estimate.rejectHands);
+            widget.onPerception?.call(estimate, req.shakeTier);
+
             if (json == null) return;
             widget.onHintShowUpperBody?.call(runtime.hintShowUpperBody);
             widget.onLandmarks?.call(json);

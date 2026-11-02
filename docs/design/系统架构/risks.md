@@ -30,6 +30,8 @@
 
 主路径无原视频出端；关键点与日志仍需控制留存；历史默认文本。
 
+**实现现状（2026-11）**：运行期数据当前以 JSON 文件存放在**仓库内**（`websocket-server/data/{users,membership,history}.json`，含手机号与密码哈希），与「控制留存 / 最小化」不一致，须移出版本库（保留示例文件 + `.gitignore`）并限制访问；`GET /api/v1/devices` 目前返回全局设备视图，未按账号过滤（见 [../../api/protocol.md](../../api/protocol.md)「实现现状」）。
+
 ## 开放问题
 
 1. 设备互斥：已决。边缘拒绝后来者（`device_busy`）；同一账号的 App 会话踢旧（`session_replaced`）。

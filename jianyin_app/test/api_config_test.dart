@@ -24,9 +24,10 @@ void main() {
       deviceId: 'app-demo',
       sessionId: 'sess-1',
     );
+    // 握手地址取自 REST 返回的 wsUrl（此处即传入值）；默认地址见 ApiConfig。
     expect(uri.scheme, 'ws');
-    expect(uri.host, '192.168.1.100');
-    expect(uri.port, 8000);
+    expect(uri.host, '186.241.105.178');
+    expect(uri.port, 8800);
     expect(uri.path, '/ws/app');
     expect(uri.queryParameters.containsKey('token'), isFalse);
     expect(uri.queryParameters['deviceId'], 'app-demo');

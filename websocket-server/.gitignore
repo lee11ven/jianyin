@@ -3,3 +3,9 @@ node_modules/
 *.log
 .DS_Store
 dist/
+
+# 运行期数据（账号 / 会员 / 历史，含手机号与密码哈希）：只留部署机，不纳入版本库。
+# 静态配置（data/plans.json、src/data/gestures.json）仍在版本库内。
+data/users.json
+data/membership.json
+data/history.json

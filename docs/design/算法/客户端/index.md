@@ -2,7 +2,7 @@
 
 > 仅算法设计；不包含业务代码。对齐方案 A：端侧关键点、主路径不上行原始视频。
 
-协议以 [../../api/protocol.md](../../api/protocol.md) 为准（上行 `landmarks`；下行 `speech` / `audio.header` + Binary）；系统位置见 [../../系统架构/architecture.md](../../系统架构/architecture.md)、[../../系统架构/modules.md](../../系统架构/modules.md)。云端窗口如何消费多通道见 [../云端/滑动窗口识别.md](../云端/滑动窗口识别.md)。
+协议以 [../../api/protocol.md](../../../api/protocol.md) 为准（上行 `landmarks`；下行 `speech` / `audio.header` + Binary）；系统位置见 [../../系统架构/architecture.md](../../系统架构/architecture.md)、[../../系统架构/modules.md](../../系统架构/modules.md)。云端窗口如何消费多通道见 [../云端/滑动窗口识别.md](../云端/滑动窗口识别.md)。
 
 ## 架构锁定（评估结论）
 
@@ -32,6 +32,68 @@
 | [手势骨架信封.md](./手势骨架信封.md) | **管线终态**：手形关节与骨节、轨迹点、身体部位、一拍观测和轨迹段的唯一信封 | 不重写抽点门限、左右槽算法和轨迹积分公式；不改 `mediapipe_hands_v1` 的 42 点语义 |
 | [流式语音播放.md](./流式语音播放.md) | WS 音频接收、按句组装、抖动缓冲、按 `utteranceId` 串行边收边播 | 不重定义协议帧字段；不写 TTS 云端合成；不写字幕 UI |
 
+> **目录状态**：原 `plans/` 目录的技术栈与落地计划已分别合并进上表各文档的「落地计划（最小可落地单元）」一节；总览（执行顺序 / 技术栈 / 第三方库）见本文下一节；`plans/` 仅保留重定向文件，不再维护正文。
+
+## 落地顺序与技术栈（合并自原 plans/index.md）
+
+> 本节由原 `plans/index.md` 合并而来（内容未改写，仅降级标题层级）。**算法语义以本文其余章节为准**。
+
+### 执行顺序（标号）
+
+同拍运行时顺序是 `body → path → hands`；**编码落地顺序**按下表（先有时钟与锚点，再有腕路径，再 Hands 与槽位）：
+
+| 序号 | 单元 | 文档 | 代码落点 |
+|------|------|------|----------|
+| **①** | 视频流抽帧 | [视频流抽帧.md](./视频流抽帧.md) | `lib/camera/` → 驱动 `PerceptionPipeline.tick` |
+| **②** | 多器官配合 | [多器官配合.md](./多器官配合.md) | `lib/body/` 替 `StubBodyExtractor` |
+| **③** | 运动轨迹 | [运动轨迹.md](./运动轨迹.md) | `lib/trajectory/` 替 `StubTrajectoryTracker` |
+| **④** | 帧手势骨架提取 | [帧手势骨架提取.md](./帧手势骨架提取.md) | `lib/skeleton/` 替 `StubHandSkeletonExtractor` |
+| **⑤** | 左右手骨架提取 | [左右手骨架提取.md](./左右手骨架提取.md) | 同 `lib/skeleton/` 槽位/跟踪加固 |
+
+```mermaid
+flowchart TD
+  S1["1_Camera_IdleActive"] --> S2["2_Pose_body_frame"]
+  S2 --> S3["3_Path_wrist_gap"]
+  S3 --> S4["4_Hands_42_N0"]
+  S4 --> S5["5_Handedness_slots"]
+  S5 --> Pack[envelope_csl_channels_v1]
+```
+
+### 技术栈（锁定）
+
+| 层 | 选型 | 说明 |
+|----|------|------|
+| 应用 | Flutter / Dart（`jianyin_app`） | 一期客户端；感知仅 Home |
+| 相机 | `camera` 插件 + `CameraImage` 流 | 已在 `pubspec.yaml`；后置预览，不上行视频 |
+| 视觉推理 | **Google MediaPipe Tasks Vision**（原生） | 点序与协议 `mediapipe_hands_v1` / Pose 索引锁定一致 |
+| 桥接 | 薄 Platform Channel（Android `tasks-vision` + iOS MediaPipe Tasks） | 官方模型；避免与协议点序不一致的替代方案 |
+| 调度 | 现有 `PerceptionPipeline` | 同拍 `body → path → hands → pack` |
+| 上行 | 现有 `envelope/` → WS `landmarks` | 不改协议字段 |
+| 图像门控 | Dart 侧对 Y 平面做帧差 / Laplacian | MVP 不引入 OpenCV |
+
+**不采用（MVP）**：整段视频上云、云端稳像 SDK、以 ML Kit Pose 替换 MediaPipe（索引需重映射，易漂协议）。
+
+### 成熟第三方库
+
+| 库 / 制品 | 用途 | 对应序号 | 成熟度说明 |
+|-----------|------|----------|------------|
+| [`camera`](https://pub.dev/packages/camera) | 预览 + `startImageStream` | ① | 已依赖 `^0.12.0+1` |
+| MediaPipe **Hand Landmarker**（`hand_landmarker.task`） | 每手 21 点 + handedness | ④⑤ | Google AI Edge 官方；Android `com.google.mediapipe:tasks-vision` |
+| MediaPipe **Pose Landmarker**（lite/full `.task`） | 鼻/肩等姿态子集 | ②③（腕可先用 Pose） | 同上官方 Tasks |
+| MediaPipe **Face Landmarker** | 口/眉/头姿 → `nonmanual` | 延后 | 官方；本 MVP 不做 |
+| 可选加速：[`hand_landmarker`](https://pub.dev/packages/hand_landmarker)（pub） | Android 快速验证 Hands | ④ | 社区 JNI 封装；正式双端仍以自有 Channel 为准 |
+| [`image`](https://pub.dev/packages/image)（可选） | ROI 灰度 / 调试转码 | ① | 纯 Dart；清晰度优先直接扫 `CameraImage` Y 平面 |
+| 自研（无新依赖） | Idle/Active、path gap、槽位融合、信封 | ①③⑤ | 算法在端侧 Dart |
+
+模型文件随 App 资产或首次解压分发；阀门冷启动加载（见 App roadmap）。
+
+### 与同拍调度的关系
+
+| 运行时 | 说明 |
+|--------|------|
+| ① 产出 | `ts`、是否送手形、`hand_state`、`forcePathGap`、帧引用 |
+| ②③④⑤ | 仅在活动段 tick 内按 pipeline 已串顺序执行 |
+| ③ 腕来源 | ② 后可用 Pose 腕；④ 接入后改为 Hands `track` 腕注入（避免 path↔hands 循环） |
 ## 管线位置
 
 一期假定：**Flutter 相机预览**。抽帧不只选帧：活动段同时驱动**手形 / 指轨迹 / 多器官**三支路，由信封统一身份后投影上行。手形用 MediaPipe Hands；活动段轨迹用固定节拍（腕/掌心/指尖）；头肩与口动用姿态子集和脸部紧凑量。肩或鼻不可用时，该段可不建身体坐标，轨迹退回图像空间。感知计算在端侧完成；云端只收多通道关键点序列。播音为**独立下行支路**，不依赖相机帧时钟。
@@ -196,4 +258,4 @@ flowchart TB
 
 - [视频流抽帧.md](./视频流抽帧.md) · [机位矫正.md](./机位矫正.md) · [帧手势骨架提取.md](./帧手势骨架提取.md) · [左右手骨架提取.md](./左右手骨架提取.md) · [手势骨架信封.md](./手势骨架信封.md) · [运动轨迹.md](./运动轨迹.md) · [多器官配合.md](./多器官配合.md) · [流式语音播放.md](./流式语音播放.md)
 - [../云端/滑动窗口识别.md](../云端/滑动窗口识别.md)
-- [../../系统架构/architecture.md](../../系统架构/architecture.md) · [../../系统架构/modules.md](../../系统架构/modules.md) · [../../系统架构/websocket.md](../../系统架构/websocket.md) · [../../api/protocol.md](../../api/protocol.md)
+- [../../系统架构/architecture.md](../../系统架构/architecture.md) · [../../系统架构/modules.md](../../系统架构/modules.md) · [../../系统架构/websocket.md](../../系统架构/websocket.md) · [../../api/protocol.md](../../../api/protocol.md)

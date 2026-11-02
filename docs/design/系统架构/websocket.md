@@ -16,7 +16,7 @@
 
 | 方向 | 内容 |
 |------|------|
-| 上行 | JSON：`landmarks`、`ping`。一期 App 不发送 `session.start` / `session.stop`。`device.status` 仅边缘/穿戴 |
+| 上行 | JSON：`landmarks`、`ping`；另有信封**身份消息**（`envelope: "gesture_skeleton_envelope_v1"` + `kind: "catalog"`，无 `type`，仅用于对齐身份与日志，不参与识别）。一期 App 不发送 `session.start` / `session.stop`。`device.status` 仅边缘/穿戴 |
 | 下行 | JSON：`recognition`、`speech`（元数据）、`error`、`device.online` |
 | 下行 | **二进制帧**：流式 TTS 音频（正式播音路径） |
 

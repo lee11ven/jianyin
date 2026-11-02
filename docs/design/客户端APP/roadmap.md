@@ -4,13 +4,13 @@
 
 ## 实现期里程碑
 
-| 阶段 | 目标 | 交付物 |
-|------|------|--------|
-| **P1-0** | 骨架与契约 | envelope catalog；身体、轨迹、手形的身份；SDK 接入 MediaPipe |
-| **P1-1** | REST + /ws/app + Home 生命周期 | token、进 Home 建连、离 Home/退出全停、心跳、仅 Home 内重连。不发送 session.start / session.stop |
-| **P1-2** | 多通道上行 | 多器官、轨迹、帧手势；信封产出 `csl_channels_v1` 并 WS 上行 |
-| **P1-3** | 播音下行 | Recv + Asm + JitterBuffer + Player；UI 字幕。只接受 ws_binary_audio |
-| **P1-4** | 联调依赖 | 边缘模拟器与穿戴 mock 在 [系统架构/roadmap.md](../系统架构/roadmap.md)，不是 App 模块 |
+| 阶段 | 目标 | 交付物 | 现状（2026-11） |
+|------|------|--------|------------------|
+| **P1-0** | 骨架与契约 | envelope catalog；身体、轨迹、手形的身份；SDK 接入 MediaPipe | **已达成** |
+| **P1-1** | REST + /ws/app + Home 生命周期 | token、进 Home 建连、离 Home/退出全停、心跳、仅 Home 内重连。不发送 session.start / session.stop | **已达成**（`lib/ws/` + `lib/session/`） |
+| **P1-2** | 多通道上行 | 多器官、轨迹、帧手势；信封产出 `csl_channels_v1` 并 WS 上行 | **已达成**（信封已真上行） |
+| **P1-3** | 播音下行 | Recv + Asm + JitterBuffer + Player；UI 字幕。只接受 ws_binary_audio | **未开始**：`lib/tts/` 未创建 |
+| **P1-4** | 联调依赖 | 边缘模拟器与穿戴 mock 在 [系统架构/roadmap.md](../系统架构/roadmap.md)，不是 App 模块 | **未开始** |
 
 ### P1-0 进度（仓库）
 
@@ -25,12 +25,18 @@
 | 手形 / 槽位 | `lib/skeleton/` | MediaPipe Hands 42 点 + track 槽位融合 |
 | 原生桥 | `lib/native/` + Android/iOS | MethodChannel Pose/Hands，RGBA 契约 |
 | 同拍调度 | `lib/perception/` | `body → path → hands → pack`；`PerceptionRuntime` |
+| WS 连接 | `lib/ws/` | 握手（Header Bearer + deviceId/protocolVersion/sessionId）、心跳 15s、死连接 45s、指数退避 ≤30s、丢旧上行、下行分派已实现 |
+| 会话与鉴权 | `lib/session/` | OTP 注册 / 登录、deviceId 持久化、REST 建停会话、离开 Home 全停已实现 |
 
-下一步（P1-1→P1-2）：`lib/ws` 建连并将 `csl_channels_v1` 真上行。云端窗口消费见 [算法/云端/滑动窗口识别.md](../算法/云端/滑动窗口识别.md)。
+**未落地（P1-3）**：`lib/tts/` 尚未创建，下行 `audio.header` + Binary 只被接收、无播放；云端识别与 TTS 仍为占位（`websocket-server/src/pipeline/recognition.js`、`tts.js`）。
+
+下一步：建 `lib/tts/`（Recv + UtteranceAssembler + JitterBuffer + Player）打通下行播音；云端需先落地识别与流式 TTS（见 [算法/云端/滑动窗口识别.md](../算法/云端/滑动窗口识别.md)、[系统架构/architecture.md](../系统架构/architecture.md)）。
 
 ## 一期完成判据
 
 > Flutter App 演示「**本地多通道抽点 → 字幕 → WS 音频流**」完整闭环，**无视频推流依赖**。
+
+**当前未达成**：端侧抽点与上行已通；缺口在云端识别、流式 TTS 与端侧播音（见上文里程碑现状）。
 
 具体：
 - 进入 Home → 自动后置摄像头 + WS → 对准手语 → 同一拍按多器官、轨迹、帧手势计算 → 信封产出 `csl_channels_v1` → WS 上行 → 云端识别 → WS 下行字幕 + PCM 音频 → App 实时播音；无手语时为 **就绪**。
@@ -85,10 +91,10 @@
 
 - `deviceId` 是本机随机 ID，首次生成后持久化，随握手上传。它不是账号，不绑定个人身份。
 - 同一账号只保留最新的 App 会话。新会话建立后，旧连接收到 `session_replaced`。
-- App 正式路径：`POST /api/v1/auth/register` / `login`，返回 JWT（含 userId/username/phone/sex 等）与 `user` 摘要。
-- 除 health/login/register（及 debug demo-token）外，REST 与 WS 均须 `Authorization: Bearer <jwt>`。
-- debug 可调 `demo-token`；release 不得调用，也不回退 demo-token。
-- token 只进入系统安全存储，不写入日志。过期后重新登录。不增加 refresh、验证码或第三方登录字段。
+- App 正式路径：注册走 `POST /api/v1/auth/send-otp` + `POST /api/v1/auth/register`（带 `code`），登录走 `POST /api/v1/auth/login`；均返回 JWT（含 userId/username/phone/sex 等）与 `user` 摘要。
+- 除 health / send-otp / verify-otp / login / register（及 debug demo-token）外，REST 与 WS 均须 `Authorization: Bearer <jwt>`。
+- debug 可调 `demo-token`；release 不得调用，也不回退 demo-token（客户端当前未调用该端点）。
+- token 只进入系统安全存储，不写入日志。过期后重新登录。不增加 refresh 与第三方登录；注册验证码见协议 `send-otp` / `register.code`。
 
 ### 发布门
 

@@ -93,6 +93,18 @@ stateDiagram-v2
 - iOS：在 Info 背景模式中声明音频播放；相机在后台的能力受系统限制时，以「能采则采、不能采则保持 WS 与已入队播音、回前台立即恢复采帧」为底线，**不得**因熄屏单独 REST stop。
 - 省电：仅 Home 绑定的会话享受上述保活；非 Home 禁止保活。
 
+**实现现状（2026-11）**：保活**均未落地**——`AndroidManifest.xml` 只声明 `CAMERA` / `INTERNET`，无前台服务；`Info.plist` 无 `UIBackgroundModes`。在完成下表落点前，「熄屏可续 / 后台可续」不成立。
+
+**平台落点（实现要求）**
+
+| 平台 | 需要做什么 | 落点 |
+|------|-----------|------|
+| Android | 声明 `FOREGROUND_SERVICE`、`FOREGROUND_SERVICE_CAMERA`（`foregroundServiceType="camera"`）与 `POST_NOTIFICATIONS`（API 33+）；REST 建会话成功后启动前台服务 + 常驻通知；离开 Home / REST stop 时停止服务 | `android/app/src/main/AndroidManifest.xml` + 原生 `MethodChannel`（与 `lib/native/` 现有桥同构）+ `lib/session/home_session_controller.dart` 的启动/拆除处 |
+| iOS | `Info.plist` 增 `UIBackgroundModes = [audio]`；播音侧配置 `AVAudioSessionCategoryPlayback` | `ios/Runner/Info.plist` + 播音模块（见 [算法/客户端/流式语音播放.md](../算法/客户端/流式语音播放.md)） |
+| 共同 | 保活只绑 Home 会话；非 Home 一律不保活；不持久化预览、坐标与 PCM | 同上 |
+
+**平台能力差异（写进验收口径）**：iOS 后台不允许继续使用相机，故 iOS 上「熄屏仍转译」**不可实现**；可达成的口径是「熄屏/后台**不拆会话**、已下行音频可续播、回前台 2 s 内恢复抽点」。Android 前台服务可持续抽点（受省电策略影响）。
+
 ### 来电与音频焦点
 
 - 系统抢走音频焦点 / 来电：暂停或压低播音；**不**因焦点丢失单独 REST stop 或关 WS（只要仍在 Home）。
@@ -118,8 +130,12 @@ stateDiagram-v2
 | 就绪态 | 无手语活动时顶栏为「就绪」，WS 仍为已连接 |
 | 离页全停 | 打开设置/个人中心后 1s 内相机释放、WS 断开、无新 landmarks 上行 |
 | 退出全停 | 杀进程后云端会话可被 REST stop 或等价清理；无僵尸上行 |
-| 熄屏可续 | Home 未离开时熄屏 ≥ 30s，心跳仍在；有手语活动时仍可出字幕/播音（系统限制下的底线见上） |
-| 后台可续 | Home 未出栈时进后台，WS 不因「进后台」策略被主动拆掉 |
+| 熄屏不拆会话 | Home 未离开时熄屏 ≥ 30 s：会话仍 `active`、心跳未断；不因熄屏主动 REST stop |
+| 熄屏音频续播 | 熄屏期间已下行音频可继续播放（Android / iOS 均要求） |
+| 熄屏连续抽点（Android） | Android 前台服务就绪后，熄屏 ≥ 30 s 内 `landmarks` 上行未中断；前台服务未落地时该项**不计通过** |
+| 后台恢复抽点（iOS） | iOS 回前台 ≤ 2 s 恢复抽点（iOS 后台抽点不作要求，系统限制见上） |
+| 后台不拆会话 | Home 未出栈时进后台，WS 不因「进后台」策略被主动拆掉 |
+| 保活无残留 | 离开 Home / 退出应用后前台服务与音频会话停止，无常驻通知残留 |
 
 ## 相关文档
 

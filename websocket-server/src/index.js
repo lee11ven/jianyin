@@ -1,8 +1,12 @@
 import http from 'node:http';
 import express from 'express';
-import { config } from './config.js';
+import { assertSecureConfig, config } from './config.js';
 import { createRestRouter } from './rest/routes.js';
 import { attachWebSocketGateway, notifyAndCloseSession } from './ws/gateway.js';
+import { cancelTts } from './ws/handlers.js';
+
+// 启动即校验配置（production 下默认 JWT 密钥直接失败）。
+assertSecureConfig();
 
 const app = express();
 app.use(express.json({ limit: '1mb' }));
@@ -13,7 +17,8 @@ const { recognition } = attachWebSocketGateway(server);
 
 app.use(
   createRestRouter({
-    onSessionReplaced: (_sessionId, ws) => {
+onSessionReplaced: (replacedSessionId, ws) => {
+      cancelTts(replacedSessionId);
       try {
         ws.close(4000, 'session_replaced');
       } catch {

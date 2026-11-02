@@ -47,6 +47,8 @@ Flutter App 是一期的**唯一必需客户端**，承担三件事：
 | TTS播音管线 | `speech` / `audio.header` + Binary、抖动缓冲、按句串行播放 | [算法/客户端/流式语音播放.md](../算法/客户端/流式语音播放.md) |
 | UI/会话层 | token、REST 建停、字幕、UX 提示 | — |
 
+各模块的落地路径与「不做的」见 [modules.md](./modules.md)。其中 `TTS播音管线` 与 `UI/会话层` 的落点见该文档；`tts/` 规划目录**尚未创建**（当前播放状态为占位）。
+
 ## 数据流（一期最小闭环）
 
 ```mermaid
@@ -105,18 +107,28 @@ flowchart TD
 | 连接稳定性 | 心跳 15s；死连接 45s；退避重连 ≤ 30s | 设计锁定 |
 | Home 生命周期 | 进 Home 自动后置相机+WS；离页/退出全停；Home 上熄屏/后台不因策略拆会话 | 设计锁定；见 [architecture.md](./architecture.md) |
 
-## 目标目录（规划）
+## 源码目录（实况）
+
+客户端源码根：`jianyin_app/lib/`（规划名 `apps/mobile/lib/`，映射见 [系统架构/modules.md](../系统架构/modules.md)）。
 
 ```text
-apps/mobile/lib/
-  camera/          # 相机预览 + FrameSelect
-  body/            # 多器官：取景、身体坐标系、非手控
-  trajectory/      # 活动段轨迹；读取身体坐标系
-  skeleton/        # Hands 骨架 + 左右手；不直接上行
-  envelope/        # 唯一产出 csl_channels_v1
-  ws/              # WebSocket 连接与帧路由
-  tts/             # 播音管线
-  session/         # REST 建停；不重连
-  ui/              # 字幕 + 状态 + UX 提示
-  config/          # 阀门；冷启动加载
+jianyin_app/lib/
+  camera/          # 相机预览 + 自适应抽帧                      [已落地]
+  body/            # 多器官：取景、身体坐标系；Face/nonmanual 待补 [已落地]
+  trajectory/      # 活动段轨迹；读取身体坐标系                 [已落地]
+  skeleton/        # Hands 骨架 + 左右手槽位 + 交叉/遮挡         [已落地]
+  envelope/        # 唯一产出 csl_channels_v1                  [已落地]
+  ws/              # WebSocket 连接与帧路由                     [已落地]
+  perception/      # 同拍调度 body → path → hands → pack        [已落地]
+  native/          # MediaPipe 双端桥（Pose / Hands）            [已落地]
+  session/         # REST 建停；不重连                           [已落地]
+  config/          # 阈值与接口配置；冷启动加载                  [已落地]
+  features/        # 页面与交互（规划名 ui/）                    [已落地]
+  widgets/         # 复用组件                                  [已落地]
+  theme/           # 设计 token                                [已落地]
+  router/          # 路由                                      [已落地]
+  tts/             # 流式播音管线（规划位置，目录尚未创建）        [未落地]
 ```
+
+- 规划中的 `lib/ui/` 对应实际的 `lib/features/`（页面）+ `lib/widgets/`（复用组件）+ `lib/theme/`（token）。
+- 机位 4 个阀门与播音水位当前定义在 `lib/features/settings/settings_store.dart`（设置页可调，**尚未被感知/播音模块消费**）。

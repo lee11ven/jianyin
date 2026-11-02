@@ -4,7 +4,13 @@ import 'dart:ui' show Offset;
 
 import 'package:flutter/foundation.dart';
 
+import '../camera/frame_sampler.dart';
 import '../features/home/sense_status.dart';
+import '../native/keep_alive.dart';
+import '../perception/hint_keys.dart';
+import '../perception/viewpoint.dart';
+import '../tts/jitter_buffer.dart';
+import '../tts/tts_pipeline.dart';
 import '../ws/app_ws_client.dart';
 import '../ws/ws_events.dart';
 import 'api_client.dart';
@@ -63,13 +69,62 @@ class HomeSessionController extends ChangeNotifier {
     AuthStore? authStore,
     ApiClient? apiClient,
     AppWsClient? wsClient,
+    TtsPipeline? tts,
+    KeepAliveChannel? keepAlive,
   })  : _auth = authStore ?? AuthStore(),
         _api = apiClient ?? ApiClient(),
-        _ws = wsClient ?? AppWsClient();
+        _ws = wsClient ?? AppWsClient(),
+        _tts = tts ?? TtsPipeline(),
+        _keepAlive = keepAlive ?? KeepAliveChannel();
 
   final AuthStore _auth;
   final ApiClient _api;
   final AppWsClient _ws;
+
+  /// 流式播音管线（Recv → Assembler → JitterBuffer → Player）。
+  final TtsPipeline _tts;
+
+  /// 端侧保活（Android 前台服务；iOS 由背景音频模式提供）。
+  final KeepAliveChannel _keepAlive;
+
+  /// 最近一次机位档与抖动档（由感知侧每拍上报）。
+  ViewpointEstimate viewpoint = ViewpointEstimate.unavailable;
+  ShakeTier shakeTier = ShakeTier.stable;
+
+  /// 同屏提示仲裁（按 risks.md 全序取一条）。
+  final HintArbiter hints = HintArbiter();
+
+  /// 机位档：掉线时按红档显示取景框。
+  ValveBand get vpBand =>
+      sense == SenseStatus.offline ? ValveBand.red : viewpoint.band;
+
+  /// 当前应展示的提示文案（无提示时回落机位取景口吻）。
+  String get hintText {
+    final key = hints.winner(DateTime.now().millisecondsSinceEpoch);
+    return key.isNone ? '' : key.copy;
+  }
+
+  /// 感知侧每拍回调：刷新机位/抖动档并按档位点亮提示键。
+  void onPerception(ViewpointEstimate estimate, ShakeTier tier) {
+    viewpoint = estimate;
+    shakeTier = tier;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    hints.prune(now);
+
+    if (estimate.band == ValveBand.green) {
+      hints.clear(HintKey.showUpperBody);
+    } else {
+      // 黄档软提示、红档硬提示，均按 A1–A8 的对应键。
+      hints.arm(estimate.className.hintKey, nowMs: now);
+      if (estimate.className == ViewpointClass.n0) {
+        hints.arm(HintKey.faceCamera, nowMs: now);
+      }
+    }
+    if (tier == ShakeTier.heavy) {
+      hints.arm(HintKey.holdSteady, nowMs: now);
+    }
+    notifyListeners();
+  }
 
   final FaceTracker _faceTracker = FaceTracker();
   FaceTracker get faceTracker => _faceTracker;
@@ -165,6 +220,10 @@ class HomeSessionController extends ChangeNotifier {
 
       _sessionId = session.sessionId;
       _startAttempt = 0;
+      // 播音 sink 与识别会话同生命周期：进 Home 打开，离开 / 退出时 flush + close。
+      await _tts.ensureOpen();
+      // 保活与识别会话同生命周期：仅 Home 存活期间运行前台服务。
+      unawaited(_keepAlive.start());
       await _ws.connect(
         token: auth.token,
         deviceId: auth.deviceId,
@@ -281,21 +340,11 @@ class HomeSessionController extends ChangeNotifier {
     }
   }
 
-  /// Nose in body.points with usable coords → person / portrait present.
-  (double, double)? _payloadNose(Map<String, dynamic> payload) {
-    final body = payload['body'];
-    if (body is! Map) return null;
-    final points = body['points'];
-    if (points is! Map) return null;
-    final nose = points['nose'];
-    if (nose is! Map) return null;
-    final nx = (nose['x'] as num?)?.toDouble();
-    final ny = (nose['y'] as num?)?.toDouble();
-    final nv = (nose['v'] as num?)?.toDouble() ?? 1.0;
-    if (nx == null || ny == null) return null;
-    if (nv <= 0 || nx < 0 || nx > 1 || ny < 0 || ny > 1) return null;
-    return (nx, ny);
-  }
+  /// Nose with usable coords → person / portrait present.
+  ///
+  /// 取值形状与 [noseFromUplink] 一致：上行 `body` 是**扁平**结构。
+  (double, double)? _payloadNose(Map<String, dynamic> payload) =>
+      noseFromUplink(payload);
 
   /// If presence probes stop (camera stall), leave 识别中 → 就绪.
   void _armSenseIdleWatchdog() {
@@ -318,6 +367,8 @@ class HomeSessionController extends ChangeNotifier {
         captionHistory = [];
         notifyListeners();
       case WsDisconnected(:final reason):
+        // 断线即收口：重连后 tts 为 Idle，不续播旧句残片。
+        unawaited(_tts.flush());
         if (!_homeActive) return;
         if (reason == 'session_replaced') {
           _lastErrorHint = '已在其他设备继续会话';
@@ -363,26 +414,16 @@ class HomeSessionController extends ChangeNotifier {
           }
         });
       case WsSpeechMeta(:final accepted):
-        if (!accepted) {
+        _tts.onSpeech(event, sessionId: _sessionId);
+        if (!accepted || _tts.lastRejection != null) {
           _lastErrorHint = '音频格式不支持（仅接受 PCM 流）';
-          notifyListeners();
-          return;
         }
-        voice = VoiceStatus.speaking;
+        _syncVoiceFromTts();
         notifyListeners();
       case WsAudioHeader():
-        break;
-      case WsAudioBinary():
-        // P1-3 TTS pipeline will consume PCM; keep voice speaking briefly.
-        voice = VoiceStatus.speaking;
-        notifyListeners();
-        Future<void>.delayed(const Duration(milliseconds: 400), () {
-          if (!_homeActive) return;
-          if (voice == VoiceStatus.speaking) {
-            voice = VoiceStatus.idle;
-            notifyListeners();
-          }
-        });
+        _tts.onHeader(event, sessionId: _sessionId);
+      case WsAudioBinary(:final bytes, :final header):
+        unawaited(_tts.onBinary(bytes, header: header).then((_) => _syncVoiceFromTts()));
       case WsErrorEvent(:final code, :final message):
         _lastErrorHint = message.isNotEmpty ? message : code;
         if (code == 'device_busy') {
@@ -391,6 +432,21 @@ class HomeSessionController extends ChangeNotifier {
         notifyListeners();
       case WsSessionLifecycle():
         break;
+    }
+  }
+
+  /// 播报状态以 TTS 管线状态机为准（不再使用占位定时器）。
+  void _syncVoiceFromTts() {
+    final next = switch (_tts.state) {
+      PlaybackState.idle || PlaybackState.flushing => VoiceStatus.idle,
+      PlaybackState.priming ||
+      PlaybackState.playing ||
+      PlaybackState.underrun =>
+        VoiceStatus.speaking,
+    };
+    if (next != voice) {
+      voice = next;
+      notifyListeners();
     }
   }
 
@@ -422,6 +478,9 @@ class HomeSessionController extends ChangeNotifier {
     _sessionId = null;
     _token = null;
 
+    // 拆除顺序（architecture.md）：先收口播音与保活 → 关 WS → REST stop。
+    await _tts.flush();
+    await _keepAlive.stop();
     await _ws.close(reason: 'leave_home', allowReconnect: false);
 
     if (token != null && sid != null) {
@@ -448,7 +507,35 @@ class HomeSessionController extends ChangeNotifier {
     unawaited(_wsSub?.cancel());
     _wsSub = null;
     unawaited(_ws.dispose());
+    unawaited(_tts.close());
     _api.close();
     super.dispose();
   }
+}
+
+/// 上行 `body` 通道的鼻尖探针：返回图像归一化 `(x, y)`；无人像锚点时为 null。
+///
+/// 线格式是**扁平**结构 —— `body['nose'] = {x,y,z,v}` —— 与
+/// `docs/api/protocol.md` 的 `csl_channels_v1` 定义及 `BodyChannel.toJson()` 一致。
+/// 为兼容历史写法，同时接受嵌套的 `body['points']['nose']`。
+///
+/// 可见性 `v <= 0` 或坐标越界（非图像归一化）视为未检出，避免用无效锚点驱动
+/// 「识别中」状态与取景框。
+(double, double)? noseFromUplink(Map<String, dynamic> payload) {
+  final dynamic body = payload['body'];
+  if (body is! Map) return null;
+
+  final dynamic flatNose = body['nose'];
+  final dynamic nested = body['points'];
+  final dynamic nose = flatNose is Map
+      ? flatNose
+      : (nested is Map ? nested['nose'] : null);
+  if (nose is! Map) return null;
+
+  final nx = (nose['x'] as num?)?.toDouble();
+  final ny = (nose['y'] as num?)?.toDouble();
+  final nv = (nose['v'] as num?)?.toDouble() ?? 1.0;
+  if (nx == null || ny == null) return null;
+  if (nv <= 0 || nx < 0 || nx > 1 || ny < 0 || ny > 1) return null;
+  return (nx, ny);
 }

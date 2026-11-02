@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  client:
+    name: Flutter 客户端（analyze + test）
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: jianyin_app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter pub get
+      - name: 静态分析（要求零 issue）
+        run: flutter analyze
+      - name: 单元测试
+        run: flutter test
+
+  server:
+    name: Node 网关（test + 启动冒烟）
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: websocket-server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install
+      - name: 单元测试（node:test）
+        run: npm test
+      - name: 启动冒烟（/health 应返回 ok）
+        run: |
+          node src/index.js & SERVER_PID=$!
+          for i in $(seq 1 20); do
+            if curl -sf http://127.0.0.1:8000/health | grep -q '"status":"ok"'; then
+              echo "gateway is healthy"; kill $SERVER_PID; exit 0
+            fi
+            sleep 1
+          done
+          echo "gateway did not become healthy in time"; kill $SERVER_PID; exit 1

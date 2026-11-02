@@ -5,6 +5,7 @@ import '../envelope/envelope_assembler.dart';
 import '../envelope/landmark_point.dart';
 import '../native/mediapipe_vision.dart';
 import '../native/mediapipe_vision_channel.dart';
+import 'viewpoint.dart';
 import '../skeleton/hand_skeleton_extractor.dart';
 import '../skeleton/hand_types.dart';
 import '../trajectory/trajectory_tracker.dart';
@@ -17,6 +18,7 @@ class PerceptionRuntime {
     this.thresholds = PerceptionThresholds.defaults,
     this.sessionId = 'local',
     EnvelopeAssembler? assembler,
+    this.valves = ViewpointValves.defaults,
   })  : vision = vision ?? MediaPipeVisionChannel(),
         _assembler = assembler;
 
@@ -24,6 +26,9 @@ class PerceptionRuntime {
   final PerceptionThresholds thresholds;
   final String sessionId;
   final EnvelopeAssembler? _assembler;
+
+  /// 机位 4 阀（设置页持久化值，冷启动加载，不热更新）。
+  final ViewpointValves valves;
 
   late final MediaPipeBodyExtractor body = MediaPipeBodyExtractor(
     vision: vision,
@@ -45,6 +50,17 @@ class PerceptionRuntime {
   );
 
   CslChannelsLandmarks? lastLandmarks;
+
+  /// 机位估计器与最近一次结论（N0/A1–A8 + 绿/黄/红三档）；阀来自 [valves]。
+  late final ViewpointEstimator viewpointEstimator =
+      ViewpointEstimator(valves: valves);
+  ViewpointEstimate viewpoint = ViewpointEstimate.unavailable;
+
+  /// 以最近一拍的身体结果刷新机位档，返回结论供抽帧器与 UI 使用。
+  ViewpointEstimate refreshViewpoint() {
+    viewpoint = viewpointEstimator.estimate(body.lastResult);
+    return viewpoint;
+  }
 
   /// False on x86 emulators / missing native libs — camera UI still runs.
   bool visionReady = false;

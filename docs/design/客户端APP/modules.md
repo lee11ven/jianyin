@@ -8,18 +8,25 @@
 
 ## 模块一览
 
+客户端源码根：`jianyin_app/lib/`（规划名 `apps/mobile/lib/`；映射见 [系统架构/modules.md](../系统架构/modules.md)）。
+
 ```text
-apps/mobile/
-  lib/camera/          # 相机预览 + 自适应抽帧
-  lib/body/            # 多器官：取景、身体坐标系、非手控
-  lib/trajectory/      # 活动段轨迹；读取身体坐标系
-  lib/skeleton/        # 骨架提取 + 左右手槽位 + 交叉/遮挡
-  lib/envelope/        # 唯一产出 csl_channels_v1
-  lib/ws/              # WebSocket 连接与帧路由
-  lib/tts/             # 流式播音管线
-  lib/session/         # REST 建停；不重连
-  lib/ui/              # 字幕 + 状态 + UX 提示
-  lib/config/          # 阀门；冷启动加载
+jianyin_app/lib/
+  camera/          # 相机预览 + 自适应抽帧                 [已落地]
+  body/            # 多器官：取景、身体坐标系、非手控        [已落地；Face/nonmanual 待补]
+  trajectory/      # 活动段轨迹；读取身体坐标系             [已落地]
+  skeleton/        # 骨架提取 + 左右手槽位 + 交叉/遮挡      [已落地]
+  envelope/        # 唯一产出 csl_channels_v1             [已落地]
+  ws/              # WebSocket 连接与帧路由                [已落地]
+  perception/      # 同拍调度 body → path → hands → pack   [已落地]
+  native/          # MediaPipe 双端桥（Pose / Hands）       [已落地]
+  tts/             # 流式播音管线（规划位置）                [未落地]
+  session/         # REST 建停；不重连                      [已落地]
+  features/        # 页面与交互（规划名 ui/）                [已落地]
+  widgets/         # 复用组件                              [已落地]
+  theme/           # 设计 token                            [已落地]
+  router/          # 路由                                  [已落地]
+  config/          # 阈值与接口配置；冷启动加载             [已落地；机位阀门未接入]
 ```
 
 ## 同拍调度
@@ -125,6 +132,8 @@ apps/mobile/
 
 ## tts/ -- 流式播音管线
 
+**落地**：规划位置 `jianyin_app/lib/tts/`，**当前尚未创建**，本节全部职责（Recv / UtteranceAssembler / JitterBuffer / Player）**均未实现**。`ws/` 已具备 `audio.header` + Binary 的接收与分派（见 [ws/](#ws---websocket-连接管理)），待本模块接管；当前「播报中」状态由 `lib/session/home_session_controller.dart` 以占位逻辑维护。
+
 **职责**：
 - Recv：校验 speech 与 audio.header 的格式和会话。只接受 `delivery = ws_binary_audio`，且为 PCM s16le / 16 kHz / mono。
 - 收到 `inline_fallback` 或 `audioBase64`：拒收该句，提示 `hint.audio_format_error`，不入队。
@@ -163,7 +172,7 @@ stateDiagram-v2
 ## session/ -- REST 建会话 + 生命周期
 
 **职责**：
-- 正式路径：POST /api/v1/auth/register 与 /login（手机号 + 密码）取得 Bearer。debug 可另调 demo-token；release 不得调用，也不回退 demo-token。
+- 正式路径：首次注册走 `POST /api/v1/auth/send-otp` + `POST /api/v1/auth/register`（手机号 + 密码 + 验证码 `code`）；已有账号走 `POST /api/v1/auth/login`（手机号 + 密码，不校验验证码）。debug 另有 `/api/v1/auth/demo-token`；release 不得调用，也不回退 demo-token（客户端当前未调用该端点）。
 - token 只进入系统安全存储，不写入日志。过期后关 WS 并重新登录，不增加 refresh 接口。
 - `deviceId` 是本机随机 ID，首次生成后持久化，随握手上传。它不是账号。
 - **进入 Home**：调用 POST /api/v1/sessions 建会话，获得 sessionId 和 wsUrl，再交给 ws/ 连接。
@@ -179,7 +188,9 @@ stateDiagram-v2
 - 不发送 session.start / session.stop。
 - 非 Home 不建识别会话。
 
-## ui/ -- 字幕 + 状态 + UX 提示
+## ui/（实际 `features/` + `widgets/`）-- 字幕 + 状态 + UX 提示
+
+**落地**：`jianyin_app/lib/features/`（页面：`home/`、`auth/`、`history/`、`membership/`、`profile/`、`settings/`）+ `lib/widgets/`（复用组件）+ `lib/theme/`（设计 token）。规划名 `ui/` 不再单独建目录。
 
 **职责**：
 - Home 顶栏感知状态：**就绪**（已连且无手语活动）/ 识别中 / 转译中 / 掉线；语音播放为并行支路，不单独占顶栏。
@@ -199,6 +210,7 @@ stateDiagram-v2
 **职责**：
 - 提供统一的阀门配置入口，供 camera/、body/、trajectory/、skeleton/、tts/ 读取。
 - 一期冷启动从配置文件加载，不支持运行时热更新。
+- **落地**：感知阈值在 `jianyin_app/lib/config/perception_thresholds.dart`（已落地，被 camera/、body/、trajectory/、skeleton/ 读取）；接口地址在 `lib/config/api_config.dart`。机位 4 阀门与播音水位（`T_prime`/`T_target`/`T_low`/`T_underrun_wait`）当前定义在 `lib/features/settings/settings_store.dart`，**尚未接入运行时**，待收口到本模块。
 - 一期主要阀门：
   - 机位：depth.soft=0.17、depth.hard=0.67、bias.soft=0.17、bias.hard=0.78
   - 抖动：`N_shake` 5–8 帧，`T_shake_hold` 150–300 ms。`J_soft` / `J_hard` 按设备标定，本文件不新造数字。见抽帧文档。
