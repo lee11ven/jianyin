@@ -42,6 +42,16 @@ writeFileSync(
     'PORT=8000',
     'NODE_ENV=production',
     'JWT_SECRET=change-me-to-a-long-random-secret',
+    '# 演示/占位后端；接真模型或真 TTS 时再改',
+    'TTS_BACKEND=tone',
+    'RECOGNITION_BACKEND=rules',
+    '',
+    '# 大模型（OpenAI 兼容；LLM_API_KEY 留空则关闭，仅用规则词表）',
+    'LLM_PROVIDER=deepseek',
+    'LLM_API_BASE=https://api.deepseek.com',
+    'LLM_API_KEY=',
+    'LLM_MODEL=deepseek-flash',
+    'LLM_TEMPERATURE=0.0',
     '',
   ].join('\n'),
 );
@@ -96,14 +106,20 @@ pm2 save
 pm2 startup
 \`\`\`
 
-## 健康检查
+## 健康检查与文档
 
 \`\`\`bash
 curl http://127.0.0.1:8000/health
 \`\`\`
 
+Swagger UI：\`http://127.0.0.1:8000/docs\`  
+OpenAPI：\`http://127.0.0.1:8000/openapi.json\`
+
 \`NODE_ENV=production\` 时 \`/api/v1/auth/demo-token\` 不可用。
 账号/历史写入 \`data/*.json\`，请定期备份该目录。
+
+手语→中文：在 \`.env\` 填写 \`LLM_API_KEY\` 等项后，切段特征会送大模型翻译；
+留空则仅用规则词表。密钥勿提交到仓库。
 `,
 );
 

@@ -75,50 +75,42 @@ class _HomePageState extends State<HomePage> {
                   onLandmarks: _session.onLandmarks,
                   onPerception: _session.onPerception,
                 ),
-                ListenableBuilder(
-                  listenable: _session.faceTracker,
-                  builder: (context, _) {
-                    final faceTracker = _session.faceTracker;
-                    final screenW = MediaQuery.sizeOf(context).width;
-                    return Stack(
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final maxH = constraints.maxHeight;
+                    // 常规手机保持字幕 200dp；矮屏按比例让出取景区，避免整列溢出。
+                    final captionH = maxH >= CaptionZone.heightDp + 120
+                        ? CaptionZone.heightDp
+                        : (maxH * 0.45).clamp(48.0, CaptionZone.heightDp);
+                    return Column(
                       children: [
-                        ViewpointOverlay(
-                          offline: _session.vpOffline,
-                          caption: _session.hintText.isNotEmpty
-                              ? _session.hintText
-                              : _session.vpCaption,
-                          band: _session.vpBand,
-                          faceTracker: faceTracker,
-                          screenWidthDp: screenW,
+                        _CameraTopbar(
+                          status: _session.sense,
+                          onProfile: () => _leaveTo(AppRoutes.profile),
+                          onSettings: () => _leaveTo(AppRoutes.settings),
                         ),
-                        Positioned(
-                          top: 0,
-                          left: 0,
-                          right: 0,
-                          child: _CameraTopbar(
-                            status: _session.sense,
-                            onProfile: () => _leaveTo(AppRoutes.profile),
-                            onSettings: () => _leaveTo(AppRoutes.settings),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(
+                            AppTokens.space5,
+                            AppTokens.space2,
+                            AppTokens.space5,
+                            0,
                           ),
-                        ),
-                        Positioned(
-                          left: AppTokens.space5,
-                          right: AppTokens.space5,
-                          top: MediaQuery.paddingOf(context).top + 72,
                           child: _CameraHint(
                             text: hintText,
                             tone: hintTone,
                           ),
                         ),
-                        Positioned(
-                          left: 0,
-                          right: 0,
-                          bottom: 0,
-                          height: CaptionZone.heightDp,
-                          child: CaptionZone(
-                            history: _session.captionHistory,
-                            current: _session.currentCaption,
+                        Expanded(
+                          child: ViewpointOverlay(
+                            caption: _session.vpCaption,
+                            band: _session.vpBand,
                           ),
+                        ),
+                        CaptionZone(
+                          height: captionH,
+                          history: _session.captionHistory,
+                          current: _session.currentCaption,
                         ),
                       ],
                     );
@@ -202,7 +194,9 @@ class _CameraHint extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
+    return Align(
+      alignment: Alignment.center,
+      heightFactor: 1,
       child: Container(
         padding: const EdgeInsets.symmetric(
           horizontal: AppTokens.space4,
@@ -214,6 +208,8 @@ class _CameraHint extends StatelessWidget {
         ),
         child: Text(
           text,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           textAlign: TextAlign.center,
           style: const TextStyle(
             color: Colors.white,

@@ -3,6 +3,11 @@ import { appendHistory } from '../session/history.js';
 import { appendUserHistory } from '../auth/user_history.js';
 import { getSession, touchSession } from '../session/store.js';
 import { TtsDispatcher, wsTarget } from '../pipeline/tts_queue.js';
+import {
+  ENVELOPE_ID,
+  envelopeToLandmarks,
+  isEnvelopeMessage,
+} from '../pipeline/envelope.js';
 import { markAlive } from './heartbeat.js';
 
 /** 流式 TTS 调度器：按 `utteranceId` 串行、首包立即下发、背压丢最旧未发送片。 */
@@ -12,8 +17,6 @@ const ttsDispatcher = new TtsDispatcher();
 export function cancelTts(sessionId) {
   ttsDispatcher.cancel(sessionId);
 }
-
-const ENVELOPE_ID = 'gesture_skeleton_envelope_v1';
 
 /**
  * Pretty-print App uplink envelopes / landmarks to the gateway console.
@@ -45,6 +48,23 @@ function logAppEnvelope(ws, msg) {
 }
 
 /**
+ * 将 landmarks / frame 信封送入识别管道。
+ * @param {import('ws').WebSocket} ws
+ * @param {object} landmarks
+ * @param {import('../pipeline/recognition.js').RecognitionPipeline} recognition
+ */
+function ingestForRecognition(ws, landmarks, recognition) {
+  const sessionId = ws.sessionId || landmarks.sessionId;
+  if (!sessionId) return;
+  const session = getSession(sessionId);
+  if (!session || session.status !== 'active') {
+    sendJson(ws, frame('error', { code: 'session_not_found', message: 'session inactive' }));
+    return;
+  }
+  recognition.ingest(sessionId, landmarks);
+}
+
+/**
  * @param {object} deps
  * @param {import('../pipeline/recognition.js').RecognitionPipeline} deps.recognition
  */
@@ -61,7 +81,7 @@ export function createMessageHandler({ recognition }) {
     }
 
     const type = msg?.type;
-    const isEnvelope = msg?.envelope === ENVELOPE_ID;
+    const isEnvelope = isEnvelopeMessage(msg);
 
     if (type === 'ping') {
       sendJson(ws, frame('pong', { sessionId: ws.sessionId }));
@@ -78,20 +98,18 @@ export function createMessageHandler({ recognition }) {
     }
 
     if (isEnvelope) {
-      // Accepted for logging / future recognition; no mock emit.
+      // catalog：仅身份对齐；frame：投影为 landmarks 后进入识别（可走 LLM）。
+      if (msg.kind === 'frame') {
+        const landmarks = envelopeToLandmarks(msg, ws.sessionId);
+        if (landmarks) ingestForRecognition(ws, landmarks, recognition);
+      }
       return;
     }
 
     if (!type) return;
 
     if (type === 'landmarks') {
-      if (!ws.sessionId) return;
-      const session = getSession(ws.sessionId);
-      if (!session || session.status !== 'active') {
-        sendJson(ws, frame('error', { code: 'session_not_found', message: 'session inactive' }));
-        return;
-      }
-      recognition.ingest(ws.sessionId, msg);
+      ingestForRecognition(ws, msg, recognition);
       return;
     }
 

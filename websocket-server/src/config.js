@@ -25,7 +25,22 @@ recognitionWindowMs: 1000, // 环形缓冲覆盖的最近窗口（起点 0.6–1
   // 合成后端：'tone' = 离线确定性合成（演示/开发用，不依赖外部服务）；
   // 'none' = 仅发元数据与末片空二进制。生产必须换成真实合成器（见 tts.js）。
   ttsBackend: process.env.TTS_BACKEND || 'tone',
+  // 大模型（OpenAI 兼容 Chat Completions）。LLM_API_KEY 非空时，切段特征会送 LLM 译成中文；
+  // 未配置则仅用规则词表。DeepSeek / 通义 / OpenAI 等只要兼容 /v1/chat/completions 即可。
+  llm: {
+    provider: process.env.LLM_PROVIDER || '',
+    apiBase: (process.env.LLM_API_BASE || 'https://api.deepseek.com').replace(/\/$/, ''),
+    apiKey: process.env.LLM_API_KEY || '',
+    model: process.env.LLM_MODEL || 'deepseek-flash',
+    temperature: Number(process.env.LLM_TEMPERATURE ?? '0'),
+    timeoutMs: Number(process.env.LLM_TIMEOUT_MS) || 12_000,
+  },
 };
+
+/** 是否启用大模型手语→中文翻译。 */
+export function isLlmEnabled() {
+  return Boolean(config.llm.apiKey && config.llm.apiBase && config.llm.model);
+}
 
 /** 开发默认密钥：production 下使用它会在启动时直接失败。 */
 export const DEFAULT_JWT_SECRET = 'jianyin-dev-jwt-secret-change-me';

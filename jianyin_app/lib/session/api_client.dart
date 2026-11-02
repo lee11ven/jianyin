@@ -3,10 +3,12 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../config/api_config.dart';
+import 'logging_http_client.dart';
 import 'session_models.dart';
 
 class ApiClient {
-  ApiClient({http.Client? httpClient}) : _http = httpClient ?? http.Client();
+  ApiClient({http.Client? httpClient})
+      : _http = httpClient ?? LoggingHttpClient();
 
   final http.Client _http;
 

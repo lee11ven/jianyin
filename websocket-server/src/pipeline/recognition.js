@@ -3,14 +3,16 @@
  *
  * 职责：按 `ts` 对齐多通道上行 → 切出活动段 → 积分特征 → 规则词表打分 →
  * 产出 `recognition` 结果（由 `onResult` 扇出到 App / 穿戴）。
+ * 若配置了 `LLM_API_KEY`，则把特征送大模型译成中文；失败时回退规则词表。
  *
  * 契约：docs/design/算法/云端/滑动窗口识别.md、docs/api/protocol.md。
  * 可替换点：`lexicon.rankCandidates` 换成模型推理即可，其余环节保持不变。
  */
-import { config } from '../config.js';
+import { config, isLlmEnabled } from '../config.js';
 import { gesturesCatalog } from '../data/gestures.js';
 import { extractSegmentFeatures } from './features.js';
 import { DEFAULT_SCORE_THRESHOLD, getRanker } from './lexicon.js';
+import { translateSignToChinese } from './llm.js';
 
 function supportsMotion(frame) {
   return Boolean(frame && frame.path && typeof frame.path === 'object' && frame.path.gap !== true);
@@ -62,7 +64,7 @@ export class RecognitionPipeline {
       ...(options ?? {}),
     };
     this.ranker = getRanker(this.options.backend);
-    /** @type {Map<string, {frames: object[], utteranceSeq: number, lastEmitted: {glossId: string, ts: number} | null}>} */
+    /** @type {Map<string, {frames: object[], utteranceSeq: number, lastEmitted: {glossId: string, ts: number} | null, llmBusy: boolean}>} */
     this.sessions = new Map();
   }
 
@@ -78,7 +80,7 @@ export class RecognitionPipeline {
   _state(sessionId) {
     let state = this.sessions.get(sessionId);
     if (!state) {
-      state = { frames: [], utteranceSeq: 0, lastEmitted: null };
+      state = { frames: [], utteranceSeq: 0, lastEmitted: null, llmBusy: false };
       this.sessions.set(sessionId, state);
     }
     return state;
@@ -90,7 +92,7 @@ export class RecognitionPipeline {
 
   /**
    * 收一拍上行。按 `ts` 升序入环；环满/超窗丢最旧拍，保实时。
-   * @returns {object[]} 本次新产出的 recognition 结果（通常 0 或 1 条）
+   * @returns {object[]} 本次同步产出的 recognition（LLM 路径多为异步，经 onResult 回调）
    */
   ingest(sessionId, msg) {
     if (!sessionId || !msg || typeof msg !== 'object') return [];
@@ -140,18 +142,83 @@ export class RecognitionPipeline {
     const ranked = this.ranker(features);
     const best = ranked[0];
 
+    if (isLlmEnabled()) {
+      void this._emitViaLlm(sessionId, state, features, ranked, last.ts, best);
+      return null;
+    }
+
     if (!best || best.score < this.options.threshold) {
       this._logFeatures(sessionId, features, null);
       return null;
     }
 
+    return this._emitResult(sessionId, state, {
+      text: best.text,
+      confidence: Number(best.score.toFixed(3)),
+      glossIds: [best.id],
+      ts: last.ts,
+      decision: best,
+      features,
+    });
+  }
+
+  /**
+   * 大模型路径：特征 → 中文；失败时若规则候选过阈值则回退。
+   */
+  async _emitViaLlm(sessionId, state, features, ranked, ts, best) {
+    if (state.llmBusy) {
+      this._logFeatures(sessionId, features, { suppressed: 'llm_busy' });
+      return;
+    }
+    state.llmBusy = true;
+    try {
+      let translated = null;
+      try {
+        translated = await translateSignToChinese({ features, candidates: ranked });
+      } catch (err) {
+        console.error(`[llm] translate failed sid=${sessionId}:`, err?.message || err);
+      }
+
+      if (translated?.text) {
+        const glossId = translated.glossIds?.[0] || best?.id || 'llm';
+        this._emitResult(sessionId, state, {
+          text: translated.text,
+          confidence: Number(translated.confidence.toFixed(3)),
+          glossIds: translated.glossIds?.length ? translated.glossIds : best ? [best.id] : [],
+          ts,
+          decision: { id: glossId, score: translated.confidence, via: 'llm' },
+          features,
+        });
+        return;
+      }
+
+      if (best && best.score >= this.options.threshold) {
+        this._emitResult(sessionId, state, {
+          text: best.text,
+          confidence: Number(best.score.toFixed(3)),
+          glossIds: [best.id],
+          ts,
+          decision: { ...best, via: 'rules_fallback' },
+          features,
+        });
+        return;
+      }
+
+      this._logFeatures(sessionId, features, null);
+    } finally {
+      state.llmBusy = false;
+    }
+  }
+
+  _emitResult(sessionId, state, { text, confidence, glossIds, ts, decision, features }) {
+    const primaryGloss = glossIds?.[0] || decision?.id || 'unknown';
     const previous = state.lastEmitted;
     if (
       previous &&
-      previous.glossId === best.id &&
-      last.ts - previous.ts < this.options.suppressMs
+      previous.glossId === primaryGloss &&
+      ts - previous.ts < this.options.suppressMs
     ) {
-      this._logFeatures(sessionId, features, { suppressed: best.id });
+      this._logFeatures(sessionId, features, { suppressed: primaryGloss });
       return null;
     }
 
@@ -159,14 +226,14 @@ export class RecognitionPipeline {
     const result = {
       sessionId,
       utteranceId: `utt-${String(sessionId).slice(-4)}-${state.utteranceSeq}`,
-      text: best.text,
-      confidence: Number(best.score.toFixed(3)),
-      glossIds: [best.id],
+      text,
+      confidence,
+      glossIds: glossIds || [],
       vocabVersion: gesturesCatalog.vocabVersion,
-      ts: last.ts,
+      ts,
     };
-    state.lastEmitted = { glossId: best.id, ts: last.ts };
-    this._logFeatures(sessionId, features, best);
+    state.lastEmitted = { glossId: primaryGloss, ts };
+    this._logFeatures(sessionId, features, decision);
     this.onResult(result);
     return result;
   }
@@ -186,7 +253,10 @@ export class RecognitionPipeline {
     ];
     if (decision === null) parts.push('-> no-match');
     else if (decision && decision.suppressed) parts.push(`-> suppressed(${decision.suppressed})`);
-    else if (decision) parts.push(`-> ${decision.id} score=${decision.score.toFixed(2)}`);
+    else if (decision) {
+      const via = decision.via ? ` via=${decision.via}` : '';
+      parts.push(`-> ${decision.id} score=${Number(decision.score).toFixed(2)}${via}`);
+    }
     console.log(parts.join(' '));
   }
 }

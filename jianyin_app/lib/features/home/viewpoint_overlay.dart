@@ -1,241 +1,224 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../perception/viewpoint.dart';
-import '../../session/home_session_controller.dart';
 import '../../theme/tokens.dart';
 
-/// Viewport alignment overlay that follows the real-time face ellipse.
-class ViewpointOverlay extends StatefulWidget {
+/// 写死在预览上的构图模板：顶对齐、3:4，不跟随鼻点移动。
+///
+/// 父级需要给出有界高度（顶栏和字幕之间的剩余区域）。框放不下时缩小，
+/// 放不下一整框时只留一行说明，避免把字幕区和提示胶囊挤出屏幕。
+class ViewpointOverlay extends StatelessWidget {
   const ViewpointOverlay({
     super.key,
-required this.offline,
     required this.caption,
-    required this.faceTracker,
-    required this.screenWidthDp,
     this.band,
   });
 
-  final bool offline;
   final String caption;
 
-  /// 机位档：绿/黄/红驱动取景框三色；null 时按 [offline] 取红/绿。
+  /// 机位档：绿/黄/红驱动取景框三色。null 按绿。
   final ValveBand? band;
-  final FaceTracker faceTracker;
-  final double screenWidthDp;
 
-  @override
-  State<ViewpointOverlay> createState() => _ViewpointOverlayState();
-}
-
-class _ViewpointOverlayState extends State<ViewpointOverlay>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _alignController;
-  double _alignedRatio = 1.0;
-
-  @override
-  void initState() {
-    super.initState();
-    _alignController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 200),
-    );
-    widget.faceTracker.addListener(_onFaceUpdate);
-  }
-
-  @override
-  void dispose() {
-    widget.faceTracker.removeListener(_onFaceUpdate);
-    _alignController.dispose();
-    super.dispose();
-  }
-
-  void _onFaceUpdate() {
-    if (!widget.faceTracker.hasFace) return;
-    final dx = widget.faceTracker.x! - 0.5;
-    if (dx.abs() < 0.02) {
-      if (_alignedRatio != 1.0) {
-        setState(() => _alignedRatio = 1.0);
-        _alignController.forward(from: 0);
-      }
-    } else {
-      _alignedRatio = (1.0 - dx.abs() * 2).clamp(0.0, 1.0);
-      _alignController.forward(from: 0);
-    }
-  }
+  static const _maxWidth = 280.0;
+  static const _widthFraction = 0.78;
+  static const _maxHeightFraction = 0.46;
+  static const _minFrame = 48.0;
 
   @override
   Widget build(BuildContext context) {
-    final color = widget.offline
-        ? AppTokens.vpRed
-        : switch (widget.band ?? ValveBand.green) {
-            ValveBand.green => AppTokens.vpGreen,
-            ValveBand.yellow => AppTokens.vpYellow,
-            ValveBand.red => AppTokens.vpRed,
-          };
-    final frameW = widget.screenWidthDp * 0.72;
-    final frameH = frameW * 4 / 3;
+    final active = band ?? ValveBand.green;
+    final stroke = switch (active) {
+      ValveBand.green => AppTokens.vpGreen,
+      ValveBand.yellow => AppTokens.vpYellow,
+      ValveBand.red => AppTokens.vpRed,
+    };
+    final captionColor = active == ValveBand.green
+        ? const Color(0x8CF1F5F9)
+        : stroke;
 
-    return IgnorePointer(
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SizedBox(
-              width: frameW,
-              height: frameH,
-              child: CustomPaint(
-                painter: _ViewpointPainter(
-                  color: color,
-                  faceTracker: widget.faceTracker,
-                  frameW: frameW,
-                  frameH: frameH,
-                  screenWidthDp: widget.screenWidthDp,
-                  alignedRatio: _alignedRatio,
+    final captionStyle = TextStyle(
+      color: captionColor,
+      fontSize: AppTokens.textXs,
+      fontWeight: FontWeight.w500,
+      height: 1.2,
+      letterSpacing: 0.04 * AppTokens.textXs,
+      shadows: const [
+        Shadow(color: Colors.black54, blurRadius: 6),
+      ],
+    );
+
+    return ExcludeSemantics(
+      child: IgnorePointer(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final slotH = constraints.maxHeight;
+            final line = MediaQuery.textScalerOf(context).scale(AppTokens.textXs) *
+                1.2;
+            // 说明比剩余区域还高时，只留一行，不再排框。
+            if (slotH < line + AppTokens.space3 + _minFrame) {
+              return FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.topCenter,
+                child: Text(
+                  caption,
+                  maxLines: 1,
+                  style: captionStyle,
                 ),
-              ),
-            ),
-            const SizedBox(height: AppTokens.space3),
-            Text(
-              widget.caption,
-              style: TextStyle(
-                color: color,
-                fontSize: AppTokens.textXs,
-                fontWeight: FontWeight.w500,
-                shadows: const [
-                  Shadow(color: Colors.black54, blurRadius: 6),
-                ],
-              ),
-            ),
-          ],
+              );
+            }
+
+            final screenH = MediaQuery.sizeOf(context).height;
+            return Column(
+              children: [
+                Expanded(
+                  child: LayoutBuilder(
+                    builder: (context, frameSlot) {
+                      final frame = _fitFrame(
+                        maxWidth: frameSlot.maxWidth,
+                        maxHeight: frameSlot.maxHeight,
+                        screenHeight: screenH,
+                      );
+                      if (frame == null) return const SizedBox.shrink();
+                      return Align(
+                        alignment: Alignment.topCenter,
+                        child: SizedBox(
+                          width: frame.width,
+                          height: frame.height,
+                          child: CustomPaint(
+                            key: const ValueKey('vp-frame'),
+                            painter: _ViewpointPainter(color: stroke),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: AppTokens.space3),
+                Text(
+                  caption,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: captionStyle,
+                ),
+              ],
+            );
+          },
         ),
       ),
     );
   }
+
+  Size? _fitFrame({
+    required double maxWidth,
+    required double maxHeight,
+    required double screenHeight,
+  }) {
+    if (maxWidth < 2 || maxHeight < 2) return null;
+    var frameW = math.min(maxWidth * _widthFraction, _maxWidth);
+    var frameH = frameW * 4 / 3;
+    final cap = math.min(maxHeight, screenHeight * _maxHeightFraction);
+    if (frameH > cap) {
+      frameH = cap;
+      frameW = frameH * 3 / 4;
+    }
+    if (frameW < _minFrame || frameH < _minFrame) return null;
+    return Size(frameW, frameH);
+  }
 }
 
 class _ViewpointPainter extends CustomPainter {
-  _ViewpointPainter({
-    required this.color,
-    required this.faceTracker,
-    required this.frameW,
-    required this.frameH,
-    required this.screenWidthDp,
-    required this.alignedRatio,
-  });
+  _ViewpointPainter({required this.color});
 
   final Color color;
-  final FaceTracker faceTracker;
-  final double frameW;
-  final double frameH;
-  final double screenWidthDp;
-  final double alignedRatio;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
+    if (size.width < 2 || size.height < 2) return;
+
+    final stroke = Paint()
       ..color = color
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2
+      ..strokeWidth = 2.5
       ..strokeCap = StrokeCap.round;
 
-    const arm = 22.0;
-    // Corner brackets
-    canvas.drawLine(Offset.zero, Offset(arm, 0), paint);
-    canvas.drawLine(Offset.zero, Offset(0, arm), paint);
-    canvas.drawLine(Offset(size.width, 0), Offset(size.width - arm, 0), paint);
-    canvas.drawLine(Offset(size.width, 0), Offset(size.width, arm), paint);
-    canvas.drawLine(Offset(0, size.height), Offset(arm, size.height), paint);
-    canvas.drawLine(Offset(0, size.height), Offset(0, size.height - arm), paint);
-    canvas.drawLine(Offset(size.width, size.height), Offset(size.width - arm, size.height), paint);
-    canvas.drawLine(Offset(size.width, size.height), Offset(size.width, size.height - arm), paint);
-
-    // Shoulder dashed line
-    final dash = Paint()
-      ..color = color.withValues(alpha: 0.75)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.25;
-    final shoulderY = size.height * 0.48;
-    _drawDashed(
-      canvas,
-      Offset(size.width * 0.18, shoulderY),
-      Offset(size.width * 0.82, shoulderY),
-      dash,
+    final arm = math.min(28.0, math.min(size.width, size.height) * 0.22);
+    canvas.drawLine(Offset.zero, Offset(arm, 0), stroke);
+    canvas.drawLine(Offset.zero, Offset(0, arm), stroke);
+    canvas.drawLine(Offset(size.width, 0), Offset(size.width - arm, 0), stroke);
+    canvas.drawLine(Offset(size.width, 0), Offset(size.width, arm), stroke);
+    canvas.drawLine(Offset(0, size.height), Offset(arm, size.height), stroke);
+    canvas.drawLine(Offset(0, size.height), Offset(0, size.height - arm), stroke);
+    canvas.drawLine(
+      Offset(size.width, size.height),
+      Offset(size.width - arm, size.height),
+      stroke,
+    );
+    canvas.drawLine(
+      Offset(size.width, size.height),
+      Offset(size.width, size.height - arm),
+      stroke,
     );
 
-    // Face ellipse — tracks real nose landmark
-    if (faceTracker.hasFace) {
-      final pos = faceToOverlayPos(
-        face: Offset(faceTracker.x!, faceTracker.y!),
-        overlayFrameWidthDp: frameW,
-        screenWidthDp: screenWidthDp,
-      );
-      final headW = size.width * 0.22;
-      final headH = size.height * 0.30;
-      final head = Rect.fromCenter(
-        center: pos,
-        width: headW,
-        height: headH,
-      );
-      canvas.drawOval(head, paint..strokeWidth = 1.5);
-    } else {
-      // Placeholder when no face detected yet
-      final head = Rect.fromCenter(
-        center: Offset(size.width / 2, size.height * 0.30),
-        width: size.width * 0.22,
-        height: size.height * 0.30,
-      );
-      canvas.drawOval(
-        head,
-        paint
-          ..color = color.withValues(alpha: 0.4)
-          ..strokeWidth = 1.5
-          ..style = PaintingStyle.stroke,
-      );
-    }
+    final shoulder = Paint()
+      ..color = color.withValues(alpha: 0.45)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+    final shoulderY = size.height * 0.38;
+    _drawDashedLine(
+      canvas,
+      Offset(size.width * 0.12, shoulderY),
+      Offset(size.width * 0.88, shoulderY),
+      shoulder,
+    );
 
-    // Center-alignment arrow when face is off-center
-    if (faceTracker.hasFace && alignedRatio < 0.95) {
-      final arrowPaint = Paint()
-        ..color = color
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2;
-      final cx = size.width / 2;
-      final cy = size.height * 0.30;
-      final dy = (0.5 - faceTracker.y!) * size.height * 0.15;
-      final arrowDir = dy.sign;
-      final arrowY = cy + dy;
-      canvas.drawLine(Offset(cx, cy - 8 * arrowDir), Offset(cx, arrowY), arrowPaint);
-      final tipSize = 5.0;
-      canvas.drawLine(
-        Offset(cx - tipSize, arrowY - 6 * arrowDir),
-        Offset(cx, arrowY),
-        arrowPaint,
-      );
-      canvas.drawLine(
-        Offset(cx + tipSize, arrowY - 6 * arrowDir),
-        Offset(cx, arrowY),
-        arrowPaint,
-      );
-    }
+    final headW = math.min(size.width * 0.22, size.height * 0.34);
+    final head = Rect.fromLTWH(
+      (size.width - headW) / 2,
+      size.height * 0.14,
+      headW,
+      headW,
+    );
+    final headPaint = Paint()
+      ..color = color.withValues(alpha: 0.55)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+    _drawDashedOval(canvas, head, headPaint);
   }
 
-  void _drawDashed(Canvas canvas, Offset a, Offset b, Paint paint) {
+  void _drawDashedLine(Canvas canvas, Offset a, Offset b, Paint paint) {
     const dashWidth = 6.0;
     const gap = 5.0;
     final total = (b - a).distance;
+    if (total < 1) return;
     final dir = (b - a) / total;
     var drawn = 0.0;
     while (drawn < total) {
       final from = a + dir * drawn;
-      final to = a + dir * (drawn + dashWidth).clamp(0.0, total);
+      final to = a + dir * math.min(drawn + dashWidth, total);
       canvas.drawLine(from, to, paint);
       drawn += dashWidth + gap;
     }
   }
 
+  void _drawDashedOval(Canvas canvas, Rect rect, Paint paint) {
+    if (rect.width < 2 || rect.height < 2) return;
+    const dash = 4.0;
+    const gap = 3.5;
+    final metric = Path()..addOval(rect);
+    for (final part in metric.computeMetrics()) {
+      var dist = 0.0;
+      while (dist < part.length) {
+        final next = math.min(dist + dash, part.length);
+        canvas.drawPath(part.extractPath(dist, next), paint);
+        dist = next + gap;
+      }
+    }
+  }
+
   @override
   bool shouldRepaint(covariant _ViewpointPainter oldDelegate) =>
-      oldDelegate.color != color ||
-      oldDelegate.faceTracker != faceTracker ||
-      oldDelegate.alignedRatio != alignedRatio;
+      oldDelegate.color != color;
 }

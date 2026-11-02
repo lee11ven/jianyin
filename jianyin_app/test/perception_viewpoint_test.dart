@@ -42,6 +42,7 @@ void main() {
       expect(estimate.band, ValveBand.green);
       expect(estimate.depthScore, 0);
       expect(estimate.biasScore, 0);
+      expect(estimate.frameCaption, '机位矫正 · 头肩双手入框');
     });
 
     test('标准机位（头肩居中、头-肩距约一个肩宽）→ N0/绿', () {
@@ -62,6 +63,7 @@ void main() {
       expect(estimate.band, ValveBand.red);
       expect(estimate.rejectHands, isTrue);
       expect(estimate.className.hintKey, HintKey.vpLessLeftDown);
+      expect(estimate.frameCaption, '机位矫正 · 请正对镜头');
     });
 
     test('纵向拉大（仰视）→ A5，黄档给加严系数', () {
@@ -73,6 +75,7 @@ void main() {
       expect(estimate.band, ValveBand.yellow);
       expect(estimate.sharpnessScale, greaterThan(1.0));
       expect(estimate.rejectHands, isFalse);
+      expect(estimate.frameCaption, '机位矫正 · 抬高机位');
     });
 
     test('横向偏移主导 → A3/A4 或 A7/A8，且随偏向加深升档', () {

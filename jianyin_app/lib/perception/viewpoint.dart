@@ -108,6 +108,23 @@ class ViewpointEstimate {
   bool get rejectHands => band == ValveBand.red;
 
   bool get writeGapWhenRejected => band == ValveBand.red;
+
+  /// 取景框下说明。只随机位档与代号变，不随感知态或胶囊文案变。
+  String get frameCaption {
+    if (band == ValveBand.red) return '机位矫正 · 请正对镜头';
+    if (band != ValveBand.yellow) return '机位矫正 · 头肩双手入框';
+    return switch (className) {
+      ViewpointClass.a1 => '机位矫正 · 降低机位',
+      ViewpointClass.a2 => '机位矫正 · 从右上回正',
+      ViewpointClass.a3 => '机位矫正 · 从右侧回正',
+      ViewpointClass.a4 => '机位矫正 · 从右下回正',
+      ViewpointClass.a5 => '机位矫正 · 抬高机位',
+      ViewpointClass.a6 => '机位矫正 · 从左下回正',
+      ViewpointClass.a7 => '机位矫正 · 从左侧回正',
+      ViewpointClass.a8 => '机位矫正 · 从左上回正',
+      ViewpointClass.n0 => '机位矫正 · 头肩双手入框',
+    };
+  }
 }
 
 /// 从图像线索估计机位档。

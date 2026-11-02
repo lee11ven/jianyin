@@ -1,7 +1,5 @@
 import 'dart:async';
 
-import 'dart:ui' show Offset;
-
 import 'package:flutter/foundation.dart';
 
 import '../camera/frame_sampler.dart';
@@ -46,20 +44,6 @@ class FaceTracker extends ChangeNotifier {
   }
 }
 
-/// Convert a face position from the camera preview frame to the overlay frame.
-///
-/// The overlay frame is centered on screen at overlayFrameWidthDp while the
-/// camera fills the full screenWidthDp. The vertical scale is identical since
-/// both use full-screen height; only the horizontal axis needs correction.
-Offset faceToOverlayPos({
-  required Offset face,
-  required double overlayFrameWidthDp,
-  required double screenWidthDp,
-}) {
-  final scaleX = overlayFrameWidthDp / screenWidthDp;
-  return Offset(face.dx * scaleX, face.dy);
-}
-
 /// Home lifecycle: REST session + /ws/app + caption state.
 ///
 /// Enter Home -> (camera ready) -> token -> POST /sessions -> WS.
@@ -94,9 +78,8 @@ class HomeSessionController extends ChangeNotifier {
   /// 同屏提示仲裁（按 risks.md 全序取一条）。
   final HintArbiter hints = HintArbiter();
 
-  /// 机位档：掉线时按红档显示取景框。
-  ValveBand get vpBand =>
-      sense == SenseStatus.offline ? ValveBand.red : viewpoint.band;
+  /// 取景框颜色只由机位档决定。掉线、识别中、转译中不改框色。
+  ValveBand get vpBand => viewpoint.band;
 
   /// 当前应展示的提示文案（无提示时回落机位取景口吻）。
   String get hintText {
@@ -164,11 +147,8 @@ class HomeSessionController extends ChangeNotifier {
     return senseStates[sense]!;
   }
 
-  bool get vpOffline => sense == SenseStatus.offline;
-
-  String get vpCaption => sense == SenseStatus.offline
-      ? '机位矫正 · 连接中断'
-      : '机位矫正 · 头肩双手入框';
+  /// 框下说明。与顶栏感知态、提示胶囊分开。
+  String get vpCaption => viewpoint.frameCaption;
 
   Future<void> start() async {
     _homeActive = true;
